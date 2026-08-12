@@ -8,4 +8,4 @@ DocumentationURL: "https://www.inovance.com/"
 DeviceType: "Servo Drive"
 Notes: "Same H-code architecture as the IS620N; distinct product code. Supports EoE in addition to CoE."
 SrcFile: src/devices/lcec_inovance.c
-TestingStatus: ""
+TestingStatus: "Identified on a live bus 2026-08-12 (product 0x000c010d); shares the IS620N code path, which is tested to OP. Not yet run to OP itself."
