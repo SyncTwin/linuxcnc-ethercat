@@ -1,3 +1,27 @@
+linuxcnc-ethercat (1:1.42.2-1+synctwin2) unstable; urgency=low
+
+  * Add drivers for four vendors that upstream does not cover, all read off
+    live hardware on our bench: Inovance (IS620N, SV660), Wecon (VD3E),
+    Mitsubishi (MR-J4 TM series) and Schneider Electric (Lexium 28 / LXM28E).
+  * IS620N and VD3E have been run to OP state on real drives; the Mitsubishi
+    and Schneider drivers are written from bus data only and say so in their
+    device cards.
+
+ -- SyncTwin <info@synctwin.ru>  Wed, 13 Aug 2026 07:30:00 +0300
+
+linuxcnc-ethercat (1:1.42.2-1+synctwin1) unstable; urgency=low
+
+  * Debian epoch 1: on purpose — the openSUSE science:EtherLab repo publishes
+    snapshot versions like 1.42.2.g7fffa62-0, which dpkg ranks ABOVE a plain
+    1.42.2-1+synctwinN, so apt silently kept the stock package and our drivers
+    never arrived (observed on vm-stand1, 2026-08-12). The epoch outranks any
+    upstream snapshot; drop it only if we stop shipping our own build.
+  * inovance: new driver for Inovance IS620N and SV660 EtherCAT servo drives
+    (vendor 0x00100000, product codes 0x000c0108 / 0x000c010d). Built from
+    SyncTwin's fork while the change is pending upstream review.
+
+ -- SyncTwin Packaging <packages@synctwin.ru>  Wed, 12 Aug 2026 11:55:58 +0300
+
 linuxcnc-ethercat (1.42.2-1) unstable; urgency=low
 
   * fix(main): fold pll_err into [-period/2, period/2) in the
