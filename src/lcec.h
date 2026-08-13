@@ -74,6 +74,7 @@ extern "C" {
 #define LCEC_WECON_VID      0x00000eff
 #define LCEC_INOVANCE_VID   0x00100000
 #define LCEC_LEADSHINE_VID  0x00004321
+#define LCEC_SCHNEIDER_VID  0x0800005a
 
 // State update period (ns)
 #define LCEC_STATE_UPDATE_PERIOD 1000000000LL
