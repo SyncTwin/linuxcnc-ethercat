@@ -30,6 +30,7 @@
 - [EL4xxx: Beckhoff analog output devices](el4xxx.md)
 - [EL7041: Beckhoff EL7041 stepper drives](el7041.md)
 - [Leadshine stepper drives](leadshine_stepper.md)
+- [Mitsubishi MR-J4-TM servo drives](mitsubishi.md)
 - [Omron MX2 VFD](ommx2.md)
 - [RTelligent ECR and ECT stepper drives](rtec.md)
 - [RTelligent DRV DC servo drives](rtdrv.md)
