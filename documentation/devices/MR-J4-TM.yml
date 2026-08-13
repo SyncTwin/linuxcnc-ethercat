@@ -1,0 +1,11 @@
+---
+Device: MR-J4-TM
+VendorID: "0x00000a1e"
+VendorName: "Mitsubishi"
+PID: "0x00000201"
+Description: "Mitsubishi MR-J4 servo drive, TM (EtherCAT) network type"
+DocumentationURL: "https://www.mitsubishielectric.com/fa/products/drv/servo/"
+DeviceType: "Servo Drive"
+Notes: "CoE and FoE. One RxPDO and one TxPDO (0x1c12/0x1c13 hold a single entry each, 0x1600/0x1a00); as shipped they carry 12 and 14 entries, fuller than other vendors because Mitsubishi maps its own 0x2d01..0x2d03 Control DI, 0x2d11..0x2d13 Status DO and 0x2d20 velocity limit alongside the standard objects. SDO-Info works and returns 809 objects. No ESI available to us, so DC is not preset."
+SrcFile: src/devices/lcec_mitsubishi.c
+TestingStatus: "Identified on a live bus 2026-08-13 (MR-J4-20TM, revision 0x00020002): identity, PDO map and 0x6502 = 0x03ad read directly from the drive. Not yet run to OP with this driver."
