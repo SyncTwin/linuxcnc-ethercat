@@ -34,3 +34,4 @@
 - [Omron MX2 VFD](ommx2.md)
 - [RTelligent ECR and ECT stepper drives](rtec.md)
 - [RTelligent DRV DC servo drives](rtdrv.md)
+- [Wecon VD3E servo drives](wecon.md)
