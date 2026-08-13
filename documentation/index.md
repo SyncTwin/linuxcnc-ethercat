@@ -33,3 +33,4 @@
 - [Omron MX2 VFD](ommx2.md)
 - [RTelligent ECR and ECT stepper drives](rtec.md)
 - [RTelligent DRV DC servo drives](rtdrv.md)
+- [Schneider Electric Lexium 28 servo drives](schneider.md)
