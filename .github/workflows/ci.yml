@@ -19,13 +19,17 @@ permissions:
 
 jobs:
     build-deb:
-        name: ${{ matrix.distro }}${{ matrix.hal_api == 'next' && ' (HAL next)' || '' }}
-        runs-on: ubuntu-latest
+        name: ${{ matrix.distro }}${{ matrix.hal_api == 'next' && ' (HAL next)' || '' }}${{ matrix.arch == 'arm64' && ' (arm64)' || '' }}
+        runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
         strategy:
             fail-fast: false
             matrix:
                 distro: [debian-11, debian-12, debian-13]
                 hal_api: [legacy, next]
+                # arm64 runs on GitHub's native arm64 runners; the distro
+                # container images are multi-arch and resolve to arm64
+                # variants there.
+                arch: [amd64, arm64]
                 exclude:
                     # linuxcnc master needs a C++20 compiler; bullseye's
                     # gcc 10 fails configure. No bullseye system will ever
@@ -111,6 +115,7 @@ jobs:
               with:
                   codename: ${{ matrix.codename }}
                   distro: ${{ matrix.distro }}
+                  arch: ${{ matrix.arch }}
 
             - name: Stamp CI version
               env:
@@ -137,7 +142,7 @@ jobs:
                       fname="$(basename "$src")"
                       base="${fname%_*.deb}"
                       suffix="${fname##*_}"
-                      cp "$src" "dist/${base}_${{ matrix.distro }}${{ matrix.hal_api == 'next' && '-next' || '' }}_${suffix}"
+                      cp "$src" "dist/${base}_${{ matrix.distro }}${{ matrix.hal_api == 'next' && '-next' || '' }}${{ matrix.arch == 'arm64' && '-arm64' || '' }}_${suffix}"
                   done
 
             - name: Run tests
@@ -148,6 +153,6 @@ jobs:
             - name: Upload deb artifact
               uses: actions/upload-artifact@v7
               with:
-                  name: linuxcnc-ethercat-deb-${{ matrix.distro }}${{ matrix.hal_api == 'next' && '-next' || '' }}
+                  name: linuxcnc-ethercat-deb-${{ matrix.distro }}${{ matrix.hal_api == 'next' && '-next' || '' }}${{ matrix.arch == 'arm64' && '-arm64' || '' }}
                   path: dist/*.deb
                   if-no-files-found: error
