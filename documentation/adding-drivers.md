@@ -68,8 +68,8 @@ compatibility layer in `src/lcec_hal_compat.h` (already included via
   reference types internally.
 
 See any converted driver (for example
-[`lcec_el1xxx.c`](../src/devices/lcec_el1xxx.c)) for how this looks in
-practice.
+[`lcec_deasda.c`](../src/devices/lcec_deasda.c), which uses both pin
+and param macros) for how this looks in practice.
 
 ### Style points
 
