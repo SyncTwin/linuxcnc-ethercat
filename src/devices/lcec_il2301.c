@@ -387,8 +387,7 @@ static void lcec_il2301_read(lcec_slave_t *slave, long period) {
   if (!slave->state.operational) return;
 
   if (hal_data->state_pdo_valid && hal_data->coupler_state != NULL) {
-    *(hal_data->coupler_state) =
-        EC_READ_U16(pd + hal_data->state_pdo_os);
+    LCEC_PIN_U32_SET(hal_data->coupler_state, EC_READ_U16(pd + hal_data->state_pdo_os));
   }
 
   if (hal_data->din != NULL) lcec_din_read_all(slave, hal_data->din);
