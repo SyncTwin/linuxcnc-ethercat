@@ -1,3 +1,27 @@
+linuxcnc-ethercat (1.43.0-1) unstable; urgency=low
+
+  * feat(hal): support the new LinuxCNC HAL getter/setter API
+    (LinuxCNC PR #4099) while keeping compatibility with the classic
+    API. All pin and param access goes through a compat layer that
+    uses the typed hal_get_*/hal_set_* accessors when building against
+    new LinuxCNC headers and direct access on 2.9-era headers.
+    Packages are built in two flavors per Debian release: plain (for
+    LinuxCNC 2.9.x and 2.10 builds predating the getter/setter change)
+    and +getset (for LinuxCNC 2.10 with the new HAL API). apt selects
+    the installable flavor automatically via the versioned
+    linuxcnc-uspace dependency; see the release notes when downloading
+    debs manually.
+  * feat: add driver for Beckhoff IL2301.
+  * feat(inovance): add driver for IS620N and SV660 servo drives.
+  * ci: build arm64 debs on native arm64 runners; the apt repo now
+    serves arm64 as well as amd64.
+  * fix(conf): terminate type_name after strncpy.
+  * chore(main): drop the SIGKILL handler, which cannot be installed.
+  * docs: require HAL compat macros in new drivers; document IL2301
+    and the Inovance drives.
+
+ -- Luca Toniolo <toniolo.luca@gmail.com>  Sat, 22 Aug 2026 16:55:12 +0800
+
 linuxcnc-ethercat (1.42.2-1) unstable; urgency=low
 
   * fix(main): fold pll_err into [-period/2, period/2) in the

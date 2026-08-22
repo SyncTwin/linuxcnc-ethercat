@@ -197,12 +197,32 @@ jobs:
                   body: |
                       ## Which deb do I need?
 
-                      Each Debian flavor ships two builds of the same source:
+                      Three choices, all visible in the filename:
 
-                      - **plain** (e.g. `linuxcnc-ethercat_1.42.2-1+deb13u1`): for
-                        LinuxCNC 2.9.x and pre-getter/setter 2.10 builds.
-                      - **+getset** (e.g. `linuxcnc-ethercat_1.42.2+getset-1+deb13u1`):
-                        for LinuxCNC 2.10 with the new HAL getter/setter API.
+                      `linuxcnc-ethercat_<version>[+getset]-<rev>+deb<NN>u<M>_<arch>.deb`
+
+                      1. **Debian release** - `+deb11u1` bullseye, `+deb12u1`
+                         bookworm, `+deb13u1` trixie.
+                      2. **Architecture** - `_amd64` (PC) or `_arm64`
+                         (Raspberry Pi 4/5 and other 64-bit ARM boards).
+                         `dpkg --print-architecture` tells you which you have.
+                      3. **HAL API flavor** - each distro/arch ships two builds
+                         of the same source:
+                         - **plain** (e.g. `linuxcnc-ethercat_1.43.0-1+deb13u1`):
+                           LinuxCNC 2.9.x, or 2.10 built from source before the
+                           HAL getter/setter API change (July 2026).
+                         - **+getset** (e.g.
+                           `linuxcnc-ethercat_1.43.0+getset-1+deb13u1`):
+                           LinuxCNC 2.10 built from current master, which has
+                           the new HAL getter/setter API.
+
+                      Notes:
+
+                      - bullseye ships plain only - new-API LinuxCNC needs a
+                        newer compiler than bullseye provides.
+                      - If your self-built 2.10 predates 2026-07-19, update and
+                        rebuild LinuxCNC before installing a +getset deb; it
+                        references HAL symbols older master builds do not have.
 
                       With the apt repository enabled you do not need to choose:
                       apt installs the highest version whose dependencies your
