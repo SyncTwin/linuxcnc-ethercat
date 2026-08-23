@@ -224,9 +224,12 @@ jobs:
                         rebuild LinuxCNC before installing a +getset deb; it
                         references HAL symbols older master builds do not have.
 
-                      With the apt repository enabled you do not need to choose:
-                      apt installs the highest version whose dependencies your
-                      system satisfies, which is automatically the right one.
+                      With the apt repository, the `main` component always
+                      serves the plain flavor - nothing to choose on 2.9-era
+                      systems. On a new-API 2.10 system, enable the `getset`
+                      component (`... trixie main getset` in the sources line)
+                      and apt upgrades you to the +getset build in place. See
+                      https://github.com/linuxcnc-ethercat/apt for setup.
                   prerelease: ${{ contains(github.ref_name, '~pre') || contains(github.ref_name, '-pre') }}
 
             - name: Trigger apt-repo ingestion
