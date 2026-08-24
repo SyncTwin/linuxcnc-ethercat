@@ -275,6 +275,7 @@ Lichuan CL57E-4A 4-axis closed-loop stepper drive | [lichuan](../src/devices/lce
 [Omron R88D-KNA5L-ECT G5 Series ServoDrive/Motor](http://www.ia.omron.com/) | [omrg5](../src/devices/lcec_omrg5.c) | 0x83:0x00000001 | Servo Drive |  | 
 [Inovance SV660 single-axis EtherCAT servo drive](https://www.inovance.com/) | [inovance](../src/devices/lcec_inovance.c) | 0x100000:0x000c010d | Servo Drive | Tested and working @yurc | Same H-code architecture as the IS620N; distinct product code. Supports EoE in addition to CoE.
 [Stoeber Posidrive MDS 5000](https://www.ethercat.org/en/products/CE4C65D2ED8B4F39A8166D6CEDB2C872.htm) | [stmds5k](../src/devices/lcec_stmds5k.c) | 0xb9:0x00001388 | Servo Drive |  | 
+[Wecon VD3E single-axis EtherCAT servo drive](https://docs.we-con.com.cn/bin/view/Servo/) | [wecon](../src/devices/lcec_wecon.c) | 0xeff:0x0d3e0001 | Servo Drive | Tested live 2026-08-13: OP on a five-slave bus, runs a mill spindle in CSV. DC converges only with refClockSyncCycles=-1 (103 ns). | CoE only. One RxPDO and one TxPDO, 10 entries max per mapping. 0x608f/0x6092 absent (encoder 2^23 counts/rev). SDO complete access NAKed.
 Driver for generic CiA 402 hardware without a dedicated driver | [basic_cia402](../devices/lcec_basic_cia402.c) | 0xffffffff:0xffffffff | Motion Controller |  | 
 
 There are an additional 3 device(s) supported that do not have enough
