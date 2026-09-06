@@ -19,12 +19,12 @@
 /// @file
 /// @brief Driver for Omron NX-series EtherCAT couplers (NX-ECC202)
 ///
-/// Test status: offline-verified byte-for-byte against our 2026-08-21 SDO
-/// capture from a live NX-ECC202; not yet run on live hardware with this
-/// driver.  Unverified assumption: bits inside a mapped digital entry are
-/// taken LSB-first.  That is the usual EtherCAT convention and it matches
-/// the generic config the station runs on today, but it has not been
-/// confirmed terminal by terminal on the coupler.
+/// Test status: run to OP on a live NX-ECC202 (2026-09-06), a 3x DO16 + DI
+/// station on a six-slave bus.  Bit order measured on the wire from the
+/// master's process image: dout-0 sets byte 0 bit 0, dout-1 byte 0 bit 1,
+/// dout-7 byte 0 bit 7, dout-16 byte 2 bit 0 - LSB first, modules in
+/// assignment order.  Which physical terminal carries bit 0 of a module has
+/// not been checked terminal by terminal.
 ///
 /// The NX-ECC202 is not an I/O module.  It is the EtherCAT coupler at the head
 /// of a modular Omron NX station: the coupler is the only slave on the wire,

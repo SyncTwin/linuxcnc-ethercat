@@ -8,4 +8,4 @@ DocumentationURL: "https://industrial.omron.eu/en/products/NX-ECC202"
 DeviceType: "EtherCAT Coupler"
 Notes: "Modular station head: identity is the same whatever NX units are mounted, so the process image is read from 0x1c12/0x1c13 at init instead of being hardcoded. Alignment entries (object 0x0000) are declared but get no pins. Digital units only; no DC (AL 0x0034 with dcConf)."
 SrcFile: src/devices/lcec_omron_nx.c
-TestingStatus: "PDO map read from live hardware 2026-08-21; the station runs in production via an equivalent generic config. Driver discovery verified offline against those recorded SDO answers; not yet run in-tree on the coupler."
+TestingStatus: "Run to OP on a live coupler 2026-09-06 (3x DO16 + DI station, six-slave bus): 48 dout and 4 din pins, bit order measured on the wire as LSB-first. PDO map also matches the 2026-08-21 SDO capture byte for byte."
