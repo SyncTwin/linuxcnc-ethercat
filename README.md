@@ -35,7 +35,7 @@ Driver | Device | Vendor | Test status | Evidence
 --- | --- | --- | --- | ---
 [inovance](src/devices/lcec_inovance.c) | IS620N, SV660 | Inovance | hardware-tested, run to OP | Both drives run to OP on our bench with motors attached; SV660 verified in CSP, 2026-08. See [inovance.md](documentation/inovance.md).
 [wecon](src/devices/lcec_wecon.c) | VD3E | Wecon | hardware-tested, run to OP | OP on a five-slave bus 2026-08-13, running a mill spindle in CSV; DC converges only with `refClockSyncCycles=-1`. See [wecon.md](documentation/wecon.md).
-[omron_nx](src/devices/lcec_omron_nx.c) | NX-ECC202 | Omron | offline-verified, not yet run on live hardware | Discovery checked byte-for-byte against an SDO capture taken from a live coupler on 2026-08-21. Unverified assumption: bits within a mapped digital entry are taken LSB-first. See [omron_nx.md](documentation/omron_nx.md).
+[omron_nx](src/devices/lcec_omron_nx.c) | NX-ECC202 | Omron | hardware-tested, run to OP | OP on a live coupler 2026-09-06 (3x DO16 + DI station, six-slave bus); 48 dout and 4 din pins, bit order measured on the wire as LSB-first. See [omron_nx.md](documentation/omron_nx.md).
 [schneider](src/devices/lcec_schneider.c) | LXM28E | Schneider Electric | no motor on our bench, not brought to OP | Identity, PDO map and `0x6502` read from a live drive at PREOP, 2026-08-13. See [LXM28E.yml](documentation/devices/LXM28E.yml).
 [mitsubishi](src/devices/lcec_mitsubishi.c) | MR-J4-TM | Mitsubishi | no motor on our bench, not brought to OP | Identity, PDO map and `0x6502` read from a live MR-J4-20TM at PREOP, 2026-08-13. See [MR-J4-TM.yml](documentation/devices/MR-J4-TM.yml).
 
