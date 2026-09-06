@@ -18,6 +18,9 @@
 
 /// @file
 /// @brief Driver for Inovance IS620N and SV660 servo drives
+///
+/// Test status: hardware-tested. Both drives run to OP on our bench with
+/// motors attached; SV660 verified in CSP (2026-08).
 
 #include "../lcec.h"
 #include "lcec_class_cia402.h"

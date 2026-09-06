@@ -19,6 +19,13 @@
 /// @file
 /// @brief Driver for Omron NX-series EtherCAT couplers (NX-ECC202)
 ///
+/// Test status: offline-verified byte-for-byte against our 2026-08-21 SDO
+/// capture from a live NX-ECC202; not yet run on live hardware with this
+/// driver.  Unverified assumption: bits inside a mapped digital entry are
+/// taken LSB-first.  That is the usual EtherCAT convention and it matches
+/// the generic config the station runs on today, but it has not been
+/// confirmed terminal by terminal on the coupler.
+///
 /// The NX-ECC202 is not an I/O module.  It is the EtherCAT coupler at the head
 /// of a modular Omron NX station: the coupler is the only slave on the wire,
 /// and the NX units clipped onto it are not visible as separate slaves.  Their

@@ -18,6 +18,9 @@
 
 /// @brief Driver for Mitsubishi MR-J4 CiA 402 servo drives (TM network type).
 ///
+/// Test status: identity, PDO map and 0x6502 read from a live drive at PREOP
+/// (2026-08-13, MR-J4-20TM). No motor on our bench, not brought to OP.
+///
 /// Single-axis EtherCAT servo drive. Everything below was read off a live
 /// MR-J4-20TM on our bench in 2026-08; we have no ESI file for this drive, so
 /// the values come from the bus itself rather than from vendor XML.
