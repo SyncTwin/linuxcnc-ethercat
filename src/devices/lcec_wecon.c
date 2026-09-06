@@ -19,6 +19,9 @@
 /// @file
 /// @brief Driver for Wecon CiA 402 servo drives (VD3E).
 ///
+/// Test status: hardware-tested. OP on a five-slave bus 2026-08-13, running
+/// a mill spindle in CSV.
+///
 /// Single-axis EtherCAT servo drive, CoE only. Vendor 0x00000eff,
 /// product 0x0d3e0001, revision 0x00000073, matching the vendor ESI
 /// "Wecon VD3E EtherCAT Servo V1.15.0.xml".

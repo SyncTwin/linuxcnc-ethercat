@@ -18,6 +18,9 @@
 
 /// @brief Driver for Schneider Electric Lexium 28 (LXM28E) CiA 402 servo drives.
 ///
+/// Test status: identity, PDO map and 0x6502 read from a live drive at PREOP
+/// (2026-08-13). No motor on our bench, not brought to OP.
+///
 /// Single-axis EtherCAT servo drive. Read off a live LXM28E on our bench in
 /// 2026-08. We have no ESI file for it, and — unlike the Mitsubishi on the same
 /// bus — this drive does not answer SDO-Info at all, so the object dictionary
