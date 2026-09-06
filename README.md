@@ -15,6 +15,33 @@ This tree was forked from
 [sittner/linuxcnc-ethercat](https://github.com/sittner/linuxcnc-ethercat)
 in 2023, and is the new home for most LinuxCNC EtherCAT development.
 
+## About this fork (SyncTwin)
+
+[SyncTwin/linuxcnc-ethercat](https://github.com/SyncTwin/linuxcnc-ethercat)
+is a fork of the upstream project.  It is where we stage the drivers we
+write for our own machines before proposing them upstream; the branch
+`synctwin/drivers` carries all of them in one place.
+
+Two of them are already upstream — Inovance (PR #512, in release v1.43.0)
+and Wecon (PR #519, merged after that release).  The other three are not
+submitted yet.
+
+Each driver below states how far it was actually taken on hardware.  OP is
+the EtherCAT state at which a drive starts accepting motion commands;
+everything before it (bus scan, PREOP, PDO map) can be correct without
+saying anything about whether an axis moves.
+
+Driver | Device | Vendor | Test status | Evidence
+--- | --- | --- | --- | ---
+[inovance](src/devices/lcec_inovance.c) | IS620N, SV660 | Inovance | hardware-tested, run to OP | Both drives run to OP on our bench with motors attached; SV660 verified in CSP, 2026-08. See [inovance.md](documentation/inovance.md).
+[wecon](src/devices/lcec_wecon.c) | VD3E | Wecon | hardware-tested, run to OP | OP on a five-slave bus 2026-08-13, running a mill spindle in CSV; DC converges only with `refClockSyncCycles=-1`. See [wecon.md](documentation/wecon.md).
+[omron_nx](src/devices/lcec_omron_nx.c) | NX-ECC202 | Omron | offline-verified, not yet run on live hardware | Discovery checked byte-for-byte against an SDO capture taken from a live coupler on 2026-08-21. Unverified assumption: bits within a mapped digital entry are taken LSB-first. See [omron_nx.md](documentation/omron_nx.md).
+[schneider](src/devices/lcec_schneider.c) | LXM28E | Schneider Electric | no motor on our bench, not brought to OP | Identity, PDO map and `0x6502` read from a live drive at PREOP, 2026-08-13. See [LXM28E.yml](documentation/devices/LXM28E.yml).
+[mitsubishi](src/devices/lcec_mitsubishi.c) | MR-J4-TM | Mitsubishi | no motor on our bench, not brought to OP | Identity, PDO map and `0x6502` read from a live MR-J4-20TM at PREOP, 2026-08-13. See [MR-J4-TM.yml](documentation/devices/MR-J4-TM.yml).
+
+Neither Schneider nor Mitsubishi presets distributed clocks: we have no ESI
+for either drive, so `AssignActivate` has to come from `<dcConf>` in the XML.
+
 ## Installing
 
 The recommended way to install this driver is via the project's own
