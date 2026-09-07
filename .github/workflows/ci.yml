@@ -73,6 +73,21 @@ jobs:
                   HAL_API: ${{ matrix.hal_api }}
               run: |
                   set -e
+                  if [ "${CODENAME}" = "bullseye" ]; then
+                      # bullseye went EOL 2026-08-31 and the live mirrors
+                      # (deb.debian.org AND security.debian.org) are dropping
+                      # bullseye-security pool files one by one while the
+                      # index still lists them. Pin the whole distro to the
+                      # final pre-EOL snapshot instead. Check-Valid-Until:
+                      # the frozen Release file is long expired.
+                      cat > /etc/apt/sources.list <<'EOF'
+                  deb http://snapshot.debian.org/archive/debian/20260831T000000Z bullseye main
+                  deb http://snapshot.debian.org/archive/debian-security/20260831T000000Z bullseye-security main
+                  deb http://snapshot.debian.org/archive/debian/20260831T000000Z bullseye-updates main
+                  EOF
+                      # Own conf file: 80-retries gets truncated below.
+                      echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/90-no-valid-until
+                  fi
                   echo 'Acquire::Retries "10";' > /etc/apt/apt.conf.d/80-retries
                   echo 'Acquire::http::Timeout "30";' >> /etc/apt/apt.conf.d/80-retries
                   apt-get update
