@@ -202,7 +202,12 @@ typedef struct lcec_master_data {
   hal_s32_t *drift_mode;        // Input: 0=simple, 1=manual
   hal_s32_t *pll_drift;         // Input: debug offset added to PLL correction (ns)
   hal_s32_t *pll_final;         // Output: final PLL correction value sent to rtapi (ns)
+  hal_s32_t *dc_ref_err;        // Output: raw app_time vs DC reference clock offset (ns), diagnostic only
   int32_t auto_drift_delay;     // Internal: auto-drift delay counter
+  int32_t phase_locked;         // Internal: instantaneous phase-lock state (hysteresis)
+  int32_t phase_lock_cnt;       // Internal: consecutive locked cycles (dc-phased dwell)
+  int32_t phase_unlock_cnt;     // Internal: consecutive unlocked cycles (dc-phased dwell)
+  int32_t phase_lock_dwell;     // Internal: dwell cycles for dc-phased transitions (~200 ms)
 #endif
   // Domain working counter monitoring
   hal_u32_t *wkc;             // Output: current domain working counter
@@ -218,6 +223,13 @@ typedef struct lcec_master_data {
   lcec_param_u32_t dc_sync_max;         // Param: convergence threshold (ns)
   lcec_param_bit_t dc_sync_monitor;     // Param: enable the per-cycle monitor datagram (default on)
   int dc_sync_miss_cnt;          // Internal: consecutive cycles without a monitor response
+  // Cycle time correlation: DC app time and the OS monotonic clock, sampled
+  // back-to-back each cycle, so external processes can map timestamps taken
+  // with clock_gettime(CLOCK_MONOTONIC) into the DC time domain
+  hal_u32_t *app_time_lo;   // Output: DC app time of this cycle, low 32 bits (ns)
+  hal_u32_t *app_time_hi;   // Output: DC app time of this cycle, high 32 bits
+  hal_u32_t *mono_time_lo;  // Output: monotonic time sampled with app time, low 32 bits (ns)
+  hal_u32_t *mono_time_hi;  // Output: monotonic time sampled with app time, high 32 bits
   // Phase calibration for sync_to_ref_clock=false mode
   int32_t phase_measure_cnt;  // Internal: measurement cycle counter
   int32_t phase_min;          // Internal: minimum app_phase during measurement
