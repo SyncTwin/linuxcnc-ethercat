@@ -63,15 +63,23 @@ no HAL pin for the ones that carry no I/O.
 
 Pins are chosen by object index range:
 
-- `0x6000..0x6fff` -- station inputs, `din-N`
-- `0x7000..0x7fff` -- station outputs, `dout-N`
+- `0x6000..0x6fff` -- station inputs, `slot<S>.din-<b>`
+- `0x7000..0x7fff` -- station outputs, `slot<S>.dout-<b>`
 - everything else (alignment, `0x2002` status, `0x3xxx` diagnostics) is
   declared but not exposed
 
 A one-bit entry becomes one pin.  A wider entry is treated as a packed word
-and becomes one pin per bit, LSB first.  Numbering runs across the whole
-station in assignment order, so the first output unit's first terminal is
-`dout-0`.  The station above yields `dout-0`..`dout-47` and `din-0`..`din-3`.
+and becomes one pin per bit, LSB first.
+
+Pins are named after the unit's slot, not numbered across the station.  S is
+the slot (1 = first unit next to the coupler), taken from the object index:
+NX units shift their objects by 0x20 per slot (`DependOnSlot` in the ESI), so
+S = (index - 0x6000 or 0x7000) / 0x20 + 1.  b counts the unit's terminals from
+0.  The station above yields `slot1.dout-0`..`slot3.dout-15` and
+`slot4.din-0`..`slot4.din-3`.  Station-wide numbers moved every pin behind an
+inserted or removed unit; a slot name only changes when that slot does.
+
+The 0x20 step was checked on hardware for DO16 and DI units only.
 
 Analog NX units are not supported.  A 16-bit mapping entry from a digital
 output unit and one from an analog output unit are indistinguishable in the
