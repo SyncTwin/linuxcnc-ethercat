@@ -23,7 +23,9 @@
 /// station on a six-slave bus.  Bit order measured on the wire from the
 /// master's process image: dout-0 sets byte 0 bit 0, dout-1 byte 0 bit 1,
 /// dout-7 byte 0 bit 7, dout-16 byte 2 bit 0 - LSB first, modules in
-/// assignment order.  Which physical terminal carries bit 0 of a module has
+/// assignment order.  That run used station-wide numbering; under the slot
+/// names below those are slot1.dout-0, slot1.dout-1, slot1.dout-7 and
+/// slot2.dout-0.  The slot-named build has not been run on hardware yet.  Which physical terminal carries bit 0 of a module has
 /// not been checked terminal by terminal.
 ///
 /// The NX-ECC202 is not an I/O module.  It is the EtherCAT coupler at the head
@@ -70,15 +72,33 @@
 /// Pins are created by object index range, which is what tells apart module
 /// data from the coupler's own housekeeping:
 ///
-///   - 0x6000..0x6fff -> station inputs   -> `din-N`
-///   - 0x7000..0x7fff -> station outputs  -> `dout-N`
+///   - 0x6000..0x6fff -> station inputs   -> `slot<S>.din-<b>`
+///   - 0x7000..0x7fff -> station outputs  -> `slot<S>.dout-<b>`
 ///   - everything else (0x0000 padding, the 0x2002 status byte, the 0x3xxx
 ///     diagnostics blocks) is declared but not exposed.
 ///
 /// A one-bit entry becomes one pin; a wider entry is treated as a packed word
-/// and becomes one pin per bit, LSB first.  Numbering runs across the whole
-/// station in assignment order, so the first output unit's first terminal is
-/// `dout-0`.
+/// and becomes one pin per bit, LSB first.
+///
+/// # Pin names follow the slot
+///
+/// Pins are named after the physical slot of the unit that carries them:
+/// `slot<S>.dout-<b>` and `slot<S>.din-<b>`, where S is the unit's slot
+/// (1 = first unit right of the coupler) and b counts that unit's terminals
+/// from 0.  A station of three DO16 and one DI in slots 1..4 therefore gives
+/// `slot1.dout-0..15`, `slot2.dout-0..15`, `slot3.dout-0..15` and
+/// `slot4.din-0..`.
+///
+/// Numbering across the whole station (`dout-0..47`) was used before, and it
+/// breaks as soon as a unit is inserted, removed or swapped: every pin behind
+/// it moves to a different terminal, while the HAL file that nets them stays
+/// the same.  A slot name only changes when that slot changes.
+///
+/// The slot is taken from the object index.  NX units map their data with
+/// `DependOnSlot` in the ESI: a unit's objects move by a fixed step per slot,
+/// so slot = (index - 0x6000 or 0x7000) / 0x20 + 1.  The 0x20 step is taken
+/// from the ESI and was checked on hardware for DO16 and DI units only
+/// (2026-08-21); for other unit types it is an assumption.
 ///
 /// Analog NX units are not supported: a 16-bit mapping entry from a digital
 /// output unit and a 16-bit entry from an analog output unit look identical in
@@ -97,7 +117,9 @@
 #define NX_MAX_PDOS     16  ///< Assigned PDOs we will look at, per direction.
 #define NX_MAX_ENTRIES  64  ///< Mapping entries we will look at, per direction.
 #define NX_MAX_PER_PDO  32  ///< Mapping entries in a single 0x16xx/0x1axx.
-#define NX_PIN_NAME_LEN 16  ///< Enough for "dout-<n>".
+#define NX_PIN_NAME_LEN 24  ///< Enough for "slot<s>.dout-<n>".
+#define NX_OBJ_SLOT_STEP 0x20  ///< Object index step per slot (ESI DependOnSlot); measured on DO16/DI only.
+#define NX_MAX_SLOTS (0x1000 / NX_OBJ_SLOT_STEP)  ///< Slots that fit one 0x6000/0x7000 range.
 
 /// @brief One PDO mapping entry, as decoded from a 0x16xx/0x1axx subindex.
 typedef struct {
@@ -255,15 +277,20 @@ static int lcec_omron_nx_count_pins(const lcec_omron_nx_entry_t *entries, int co
   return pins;
 }
 
+/// @brief Slot (1-based) of the unit an I/O entry belongs to.
+static int lcec_omron_nx_slot(const lcec_omron_nx_entry_t *e, uint16_t base) {
+  return (e->idx - base) / NX_OBJ_SLOT_STEP + 1;
+}
+
 /// @brief Allocate a pin name that outlives `_init`.
 ///
 /// The din/dout classes keep the pointer they are given, so a stack buffer
 /// will not do.
-static char *lcec_omron_nx_pin_name(const char *prefix, int id) {
+static char *lcec_omron_nx_pin_name(const char *prefix, int slot, int bit) {
   char *name = LCEC_HAL_ALLOCATE_STRING(NX_PIN_NAME_LEN);
 
   if (name == NULL) return NULL;
-  snprintf(name, NX_PIN_NAME_LEN, "%s-%d", prefix, id);
+  snprintf(name, NX_PIN_NAME_LEN, "slot%d.%s-%d", slot, prefix, bit);
   return name;
 }
 
@@ -277,6 +304,7 @@ static int lcec_omron_nx_init(int comp_id, lcec_slave_t *slave) {
   int n_out, n_in, n_dout, n_din;
   lcec_omron_nx_data_t *hal_data;
   lcec_syncs_t *syncs;
+  int next_bit[NX_MAX_SLOTS + 1];
   int i, j, id;
 
   n_out = lcec_omron_nx_scan(slave, NX_RXPDO_ASSIGN, out_entries, out_pdos, out_first, out_count, &n_out_pdos);
@@ -333,20 +361,26 @@ static int lcec_omron_nx_init(int comp_id, lcec_slave_t *slave) {
     if (hal_data->dout == NULL) return -ENOMEM;
 
     id = 0;
+    for (i = 0; i <= NX_MAX_SLOTS; i++) next_bit[i] = 0;
     for (i = 0; i < n_out; i++) {
       const lcec_omron_nx_entry_t *e = &out_entries[i];
+      int slot;
 
       if (!lcec_omron_nx_is_io(e, 0x7000)) continue;
+      slot = lcec_omron_nx_slot(e, 0x7000);
 
       if (e->bitlen == 1) {
-        hal_data->dout->channels[id] = lcec_dout_register_channel(slave, id, e->idx, e->sidx);
+        char *name = lcec_omron_nx_pin_name("dout", slot, next_bit[slot]++);
+
+        if (name == NULL) return -ENOMEM;
+        hal_data->dout->channels[id] = lcec_dout_register_channel_named(slave, e->idx, e->sidx, name);
         if (hal_data->dout->channels[id] == NULL) return -EIO;
         id++;
         continue;
       }
 
       for (int bit = 0; bit < e->bitlen; bit++) {
-        char *name = lcec_omron_nx_pin_name("dout", id);
+        char *name = lcec_omron_nx_pin_name("dout", slot, next_bit[slot]++);
 
         if (name == NULL) return -ENOMEM;
         hal_data->dout->channels[id] = lcec_dout_register_channel_packed(slave, e->idx, e->sidx, bit, name);
@@ -362,20 +396,26 @@ static int lcec_omron_nx_init(int comp_id, lcec_slave_t *slave) {
     if (hal_data->din == NULL) return -ENOMEM;
 
     id = 0;
+    for (i = 0; i <= NX_MAX_SLOTS; i++) next_bit[i] = 0;
     for (i = 0; i < n_in; i++) {
       const lcec_omron_nx_entry_t *e = &in_entries[i];
+      int slot;
 
       if (!lcec_omron_nx_is_io(e, 0x6000)) continue;
+      slot = lcec_omron_nx_slot(e, 0x6000);
 
       if (e->bitlen == 1) {
-        hal_data->din->channels[id] = lcec_din_register_channel(slave, id, e->idx, e->sidx);
+        char *name = lcec_omron_nx_pin_name("din", slot, next_bit[slot]++);
+
+        if (name == NULL) return -ENOMEM;
+        hal_data->din->channels[id] = lcec_din_register_channel_named(slave, e->idx, e->sidx, name);
         if (hal_data->din->channels[id] == NULL) return -EIO;
         id++;
         continue;
       }
 
       for (int bit = 0; bit < e->bitlen; bit++) {
-        char *name = lcec_omron_nx_pin_name("din", id);
+        char *name = lcec_omron_nx_pin_name("din", slot, next_bit[slot]++);
 
         if (name == NULL) return -ENOMEM;
         hal_data->din->channels[id] = lcec_din_register_channel_packed(slave, e->idx, e->sidx, bit, name);
