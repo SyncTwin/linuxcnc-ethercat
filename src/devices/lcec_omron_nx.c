@@ -100,6 +100,23 @@
 /// from the ESI and was checked on hardware for DO16 and DI units only
 /// (2026-08-21); for other unit types it is an assumption.
 ///
+/// # Unit data validity: `io-active`
+///
+/// The coupler reports, per unit, whether that unit's I/O data is valid:
+/// object 0x3006:04, "NX Unit I/O Data Active Status 125", 128 bits, where
+/// bit n is NX Unit n (bit 0 is the coupler itself) and TRUE means the data
+/// is usable (W519-E1-15, appendix A-7-6 p. A-45 and p. 9-18).  By default it
+/// is mapped in TxPDO 0x1bf8, which a stock NX-ECC202 assigns in 0x1c13.
+///
+/// When 0x3006:04 is in the input map, the driver publishes it read-only as
+///
+///   - `coupler-io-active` <- bit 0
+///   - `slot<S>.io-active` <- bit S, for every slot S that carries I/O pins
+///
+/// Nothing is written to the coupler.  If the entry is not mapped, no
+/// io-active pins are created.  Slots are the ones seen in the PDO map; a
+/// unit without process data gets no pin.
+///
 /// Analog NX units are not supported: a 16-bit mapping entry from a digital
 /// output unit and a 16-bit entry from an analog output unit look identical in
 /// the mapping, and the driver assumes digital.  Stations with analog units
@@ -120,6 +137,8 @@
 #define NX_PIN_NAME_LEN 24  ///< Enough for "slot<s>.dout-<n>".
 #define NX_OBJ_SLOT_STEP 0x20  ///< Object index step per slot (ESI DependOnSlot); measured on DO16/DI only.
 #define NX_MAX_SLOTS (0x1000 / NX_OBJ_SLOT_STEP)  ///< Slots that fit one 0x6000/0x7000 range.
+#define NX_IO_ACTIVE_IDX  0x3006  ///< NX Unit I/O Data Active Status (W519 A-7-6).
+#define NX_IO_ACTIVE_SIDX 0x04    ///< Subindex 04: 125 units, 128 bits, bit n = unit n.
 
 /// @brief One PDO mapping entry, as decoded from a 0x16xx/0x1axx subindex.
 typedef struct {
@@ -131,6 +150,11 @@ typedef struct {
 typedef struct {
   lcec_class_din_channels_t *din;
   lcec_class_dout_channels_t *dout;
+  int io_active_mapped;                        ///< 0x3006:04 is in the input map.
+  unsigned int io_active_os;                   ///< Byte offset of 0x3006:04.
+  unsigned int io_active_bp;                   ///< Bit position of 0x3006:04.
+  int io_active_bits;                          ///< Width of the mapped entry.
+  hal_bit_t *io_active[NX_MAX_SLOTS + 1];      ///< [0] coupler, [S] slot S; NULL if no pin.
 } lcec_omron_nx_data_t;
 
 static int lcec_omron_nx_init(int comp_id, lcec_slave_t *slave);
@@ -294,6 +318,40 @@ static char *lcec_omron_nx_pin_name(const char *prefix, int slot, int bit) {
   return name;
 }
 
+/// @brief Publish 0x3006:04 as `coupler-io-active` and `slot<S>.io-active`.
+///
+/// @param has_slot Nonzero for every slot that carries I/O pins.
+static int lcec_omron_nx_init_io_active(
+    lcec_slave_t *slave, lcec_omron_nx_data_t *hal_data, const lcec_omron_nx_entry_t *in_entries, int n_in, const int *has_slot) {
+  lcec_master_t *master = slave->master;
+  int i;
+
+  for (i = 0; i < n_in; i++) {
+    if (in_entries[i].idx == NX_IO_ACTIVE_IDX && in_entries[i].sidx == NX_IO_ACTIVE_SIDX) break;
+  }
+  if (i == n_in) {
+    rtapi_print_msg(RTAPI_MSG_INFO, LCEC_MSG_PFX "slave %s.%s: 0x%04x:%02x not mapped, no io-active pins\n", master->name, slave->name,
+        NX_IO_ACTIVE_IDX, NX_IO_ACTIVE_SIDX);
+    return 0;
+  }
+
+  hal_data->io_active_bits = in_entries[i].bitlen;
+  if (lcec_pdo_init(slave, NX_IO_ACTIVE_IDX, NX_IO_ACTIVE_SIDX, &hal_data->io_active_os, &hal_data->io_active_bp) != 0) return -EIO;
+  hal_data->io_active_mapped = 1;
+
+  if (lcec_pin_newf(HAL_BIT, HAL_OUT, (void **)&hal_data->io_active[0], "%s.%s.%s.coupler-io-active", LCEC_MODULE_NAME, master->name,
+          slave->name) != 0)
+    return -EIO;
+
+  for (int s = 1; s <= NX_MAX_SLOTS && s < hal_data->io_active_bits; s++) {
+    if (!has_slot[s]) continue;
+    if (lcec_pin_newf(HAL_BIT, HAL_OUT, (void **)&hal_data->io_active[s], "%s.%s.%s.slot%d.io-active", LCEC_MODULE_NAME, master->name,
+            slave->name, s) != 0)
+      return -EIO;
+  }
+  return 0;
+}
+
 static int lcec_omron_nx_init(int comp_id, lcec_slave_t *slave) {
   lcec_master_t *master = slave->master;
   lcec_omron_nx_entry_t out_entries[NX_MAX_ENTRIES], in_entries[NX_MAX_ENTRIES];
@@ -305,7 +363,8 @@ static int lcec_omron_nx_init(int comp_id, lcec_slave_t *slave) {
   lcec_omron_nx_data_t *hal_data;
   lcec_syncs_t *syncs;
   int next_bit[NX_MAX_SLOTS + 1];
-  int i, j, id;
+  int has_slot[NX_MAX_SLOTS + 1] = {0};
+  int i, j, id, err;
 
   n_out = lcec_omron_nx_scan(slave, NX_RXPDO_ASSIGN, out_entries, out_pdos, out_first, out_count, &n_out_pdos);
   if (n_out < 0) goto no_map;
@@ -352,8 +411,7 @@ static int lcec_omron_nx_init(int comp_id, lcec_slave_t *slave) {
 
   hal_data = LCEC_HAL_ALLOCATE(lcec_omron_nx_data_t);
   if (hal_data == NULL) return -ENOMEM;
-  hal_data->din = NULL;
-  hal_data->dout = NULL;
+  memset(hal_data, 0, sizeof(*hal_data));
   slave->hal_data = hal_data;
 
   if (n_dout > 0) {
@@ -368,6 +426,7 @@ static int lcec_omron_nx_init(int comp_id, lcec_slave_t *slave) {
 
       if (!lcec_omron_nx_is_io(e, 0x7000)) continue;
       slot = lcec_omron_nx_slot(e, 0x7000);
+      has_slot[slot] = 1;
 
       if (e->bitlen == 1) {
         char *name = lcec_omron_nx_pin_name("dout", slot, next_bit[slot]++);
@@ -403,6 +462,7 @@ static int lcec_omron_nx_init(int comp_id, lcec_slave_t *slave) {
 
       if (!lcec_omron_nx_is_io(e, 0x6000)) continue;
       slot = lcec_omron_nx_slot(e, 0x6000);
+      has_slot[slot] = 1;
 
       if (e->bitlen == 1) {
         char *name = lcec_omron_nx_pin_name("din", slot, next_bit[slot]++);
@@ -423,8 +483,11 @@ static int lcec_omron_nx_init(int comp_id, lcec_slave_t *slave) {
         id++;
       }
     }
-    slave->proc_read = lcec_omron_nx_read;
   }
+
+  err = lcec_omron_nx_init_io_active(slave, hal_data, in_entries, n_in, has_slot);
+  if (err != 0) return err;
+  if (hal_data->din != NULL || hal_data->io_active_mapped) slave->proc_read = lcec_omron_nx_read;
 
   return 0;
 
@@ -444,7 +507,18 @@ static void lcec_omron_nx_read(lcec_slave_t *slave, long period) {
   lcec_omron_nx_data_t *hal_data = (lcec_omron_nx_data_t *)slave->hal_data;
 
   if (!slave->state.operational) return;
-  lcec_din_read_all(slave, hal_data->din);
+  if (hal_data->din != NULL) lcec_din_read_all(slave, hal_data->din);
+
+  if (hal_data->io_active_mapped) {
+    uint8_t *pd = slave->master->process_data;
+
+    for (int s = 0; s <= NX_MAX_SLOTS; s++) {
+      unsigned int bit = hal_data->io_active_bp + s;
+
+      if (hal_data->io_active[s] == NULL) continue;
+      LCEC_PIN_BIT_SET(hal_data->io_active[s], EC_READ_BIT(&pd[hal_data->io_active_os + (bit >> 3)], bit & 7));
+    }
+  }
 }
 
 static void lcec_omron_nx_write(lcec_slave_t *slave, long period) {
