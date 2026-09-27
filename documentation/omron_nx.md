@@ -68,6 +68,13 @@ Pins are chosen by object index range:
 - everything else (alignment, `0x2002` status, `0x3xxx` diagnostics) is
   declared but not exposed
 
+One diagnostics entry is published read-only: `0x3006:04`, "NX Unit I/O
+Data Active Status 125" (128 bits, bit n = NX Unit n, bit 0 = the coupler,
+TRUE = data valid; W519-E1-15 appendix A-7-6, p. A-45 and p. 9-18).  When it
+is in the input map the driver creates `coupler-io-active` (bit 0) and
+`slot<S>.io-active` (bit S) for every slot that carries I/O pins.  Nothing is
+written to the coupler.  Not yet run on hardware.
+
 A one-bit entry becomes one pin.  A wider entry is treated as a packed word
 and becomes one pin per bit, LSB first.
 
