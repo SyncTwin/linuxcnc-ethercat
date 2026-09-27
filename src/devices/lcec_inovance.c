@@ -88,6 +88,9 @@ static int lcec_inovance_init(int comp_id, lcec_slave_t *slave) {
   options->channel[0]->enable_target_torque = 1;
   options->channel[0]->enable_actual_torque = 1;
   options->channel[0]->enable_actual_following_error = 1;
+  // 0x60FD Digital inputs: in the default 0x1A00 mapping of both drives.
+  // TxPDO is now 7 entries of 10.
+  options->channel[0]->enable_digital_input = 1;
 
   lcec_syncs_t *syncs = lcec_cia402_init_sync(slave, options);
   lcec_cia402_add_output_sync(slave, syncs, options);
