@@ -65,11 +65,34 @@ bus.
 ## Configuration
 
 There are no Inovance-specific `<modParam>` options; the standard
-[`cia402` modParams](cia402.md) apply.  The driver turns on opmode
-selection, CSP, CSV, CST, target torque, actual torque, actual
-following error, digital inputs (0x60FD) and error code (0x603F).
-That is 5 RxPDO entries (13 bytes) and 8 TxPDO entries (23 bytes),
-inside the 10-entry limit of 0x1600 and 0x1A00.
+[`cia402` modParams](cia402.md) apply and are passed to the cia402
+class.  The driver turns on opmode selection, CSP, CSV, CST, target
+torque, actual torque, actual following error, digital inputs
+(0x60FD) and error code (0x603F).  That is 5 RxPDO entries (13 bytes)
+and 8 TxPDO entries (23 bytes), inside the 10-entry limit of 0x1600
+and 0x1A00.
+
+### Homing mode (HM)
+
+CiA 402 homing mode is off by default.  Turn it on per drive with:
+
+```xml
+<slave idx="0" type="SV660" name="x">
+  <modParam name="enableHM" value="true"/>
+</slave>
+```
+
+This adds the standard cia402 homing pins: `srv-home-method` (0x6098),
+`srv-home-velocity-fast` (0x6099:01) and `srv-home-velocity-slow`
+(0x6099:02).  The cia402 class writes these objects with SDO requests
+when the pins change, not through PDOs, so the PDO mapping does not
+grow: still 5 RxPDO and 8 TxPDO entries.  The homing acceleration
+(0x609A) can be added with `enableHomeAccel`, also over SDO.  To home,
+set `srv-opmode` to 6 and use the controlword/statusword pins of the
+`cia402` component.  `homeMethod` and `homeOffset` modParams write
+0x6098 and 0x607C once at startup.
+
+Homing mode is not yet tested on hardware with these drives.
 
 Use `<dcConf>` on the slave to override the distributed-clock defaults.
 
