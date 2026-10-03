@@ -27,7 +27,6 @@ will need to include the `cia402` HAL component.
   product code `0x000c0108`.
 - [SV660](https://www.inovance.com/) 1-axis EtherCAT servo drive,
   product code `0x000c010d`.  Sold as SV660N in the EtherCAT variant.
-  Supports EoE in addition to CoE.
 
 Both are tested on hardware.  IS620N: 3 drives on one bus, all reaching
 OP and running a mill in CSP under load.  SV660: one drive reaching OP
@@ -98,8 +97,9 @@ Use `<dcConf>` on the slave to override the distributed-clock defaults.
 
 Vendor parameters ("H codes" in the Inovance manuals) are readable and
 writable over CoE, and can be set at startup with `<sdoConfig>`:
-`Hgg-pp` is index `0x2000 + 0xgg`, subindex `0xpp + 1`.  H02-01 is
-`0x2002:02`.
+`Hgg-nn` is index `0x2000 + 0xgg`; the subindex is the decimal
+parameter number `nn` plus one, written in hex.  H02-01 is
+`0x2002:02`, H02-10 is `0x2002:0B`, H0E-01 is `0x200E:02`.
 
 ## Pins
 
