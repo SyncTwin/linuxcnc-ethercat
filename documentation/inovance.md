@@ -66,8 +66,10 @@ bus.
 
 There are no Inovance-specific `<modParam>` options; the standard
 [`cia402` modParams](cia402.md) apply.  The driver turns on opmode
-selection, CSP, CSV, CST, target torque, actual torque and actual
-following error.
+selection, CSP, CSV, CST, target torque, actual torque, actual
+following error, digital inputs (0x60FD) and error code (0x603F).
+That is 5 RxPDO entries (13 bytes) and 8 TxPDO entries (23 bytes),
+inside the 10-entry limit of 0x1600 and 0x1A00.
 
 Use `<dcConf>` on the slave to override the distributed-clock defaults.
 
