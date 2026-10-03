@@ -183,7 +183,7 @@
 // PDO_SIGN_foo (below) and `32`, but it'd probably bite us
 // eventually.
 #define PDO_PIN_TYPE_actual_current            HAL_S32
-#define PDO_PIN_TYPE_actual_following_error    HAL_U32
+#define PDO_PIN_TYPE_actual_following_error    HAL_S32
 #define PDO_PIN_TYPE_actual_position           HAL_S32
 #define PDO_PIN_TYPE_actual_torque             HAL_S32
 #define PDO_PIN_TYPE_actual_velocity           HAL_S32
@@ -355,7 +355,7 @@
 // PDO_PIN_TYPE_foo, but we don't *necessarily* have PDO_PIN_TYPE_foo
 // for all objects.
 #define PDO_SIGN_actual_current            S
-#define PDO_SIGN_actual_following_error    U
+#define PDO_SIGN_actual_following_error    S
 #define PDO_SIGN_actual_position           S
 #define PDO_SIGN_actual_torque             S
 #define PDO_SIGN_actual_velocity           S

@@ -265,7 +265,7 @@ typedef struct {
       *supports_mode_csp, *supports_mode_csv, *supports_mode_cst;
 
   PDO_PIN(actual_current, hal_s32_t);
-  PDO_PIN(actual_following_error, hal_u32_t);
+  PDO_PIN(actual_following_error, hal_s32_t);
   PDO_PIN(actual_position, hal_s32_t);
   PDO_PIN(actual_torque, hal_s32_t);
   PDO_PIN(actual_velocity, hal_s32_t);
