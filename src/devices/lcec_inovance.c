@@ -57,6 +57,31 @@ typedef struct {
   lcec_class_cia402_channels_t *cia402;
 } lcec_inovance_data_t;
 
+static int handle_modparams(lcec_slave_t *slave, lcec_class_cia402_options_t *opt) {
+  lcec_master_t *master = slave->master;
+  lcec_slave_modparam_t *p;
+  int v;
+
+  // There are no Inovance-specific modParams; everything goes to the
+  // cia402 class (enableHM, homeMethod, ...).
+  for (p = slave->modparams; p != NULL && p->id >= 0; p++) {
+    v = lcec_cia402_handle_modparam(slave, p, opt);
+
+    if (v > 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR, LCEC_MSG_PFX "unknown modparam %s for slave %s.%s\n", p->name, master->name, slave->name);
+      return -1;
+    }
+
+    if (v < 0) {
+      rtapi_print_msg(
+          RTAPI_MSG_ERR, LCEC_MSG_PFX "unknown error %d from lcec_cia402_handle_modparam for slave %s.%s\n", v, master->name, slave->name);
+      return v;
+    }
+  }
+
+  return 0;
+}
+
 static int lcec_inovance_init(int comp_id, lcec_slave_t *slave) {
   lcec_master_t *master = slave->master;
   lcec_inovance_data_t *hal_data;
@@ -96,6 +121,16 @@ static int lcec_inovance_init(int comp_id, lcec_slave_t *slave) {
   // 0x603F Error code: also in the default 0x1A00 mapping of both drives.
   // TxPDO is now 8 entries of 10 (23 of 40 bytes).
   options->channel[0]->enable_error_code = 1;
+  // Homing mode (0x6098 method, 0x6099:01/02 speeds) is off by default
+  // and turned on with <modParam name="enableHM" value="true"/>.  The
+  // cia402 class writes these objects through SDO requests, not PDOs,
+  // so the mapping stays at 5 RxPDO and 8 TxPDO entries.
+  options->channel[0]->enable_hm = 0;
+
+  if (handle_modparams(slave, options) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, LCEC_MSG_PFX "modparam handling failure for slave %s.%s\n", master->name, slave->name);
+    return -EIO;
+  }
 
   lcec_syncs_t *syncs = lcec_cia402_init_sync(slave, options);
   lcec_cia402_add_output_sync(slave, syncs, options);
