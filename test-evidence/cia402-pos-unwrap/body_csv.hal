@@ -1,0 +1,32 @@
+# SV660 at bus position 4, 2^23 counts/rev, 0x6091 = 1:1 -> units are motor revs
+loadrt limit3 names=pgen,vgen
+loadrt sampler depth=4000 cfg=sffsuufs
+setp cia402.0.pos-scale 8388608
+setp cia402.0.velo-scale 8388608
+setp cia402.0.auto-fault-reset 0
+setp cia402.0.csp-mode 0
+net sw    lcec.0.d4.srv-cia-statusword    => cia402.0.statusword  sampler.0.pin.5
+net omd   lcec.0.d4.srv-opmode-display    => cia402.0.opmode-display sampler.0.pin.7
+net act   lcec.0.d4.srv-actual-position   => cia402.0.drv-actual-position sampler.0.pin.0
+net actv  lcec.0.d4.srv-actual-velocity   => cia402.0.drv-actual-velocity
+net cw    cia402.0.controlword            => lcec.0.d4.srv-cia-controlword sampler.0.pin.4
+net om    cia402.0.opmode                 => lcec.0.d4.srv-opmode
+net tgt   cia402.0.drv-target-position    => lcec.0.d4.srv-target-position sampler.0.pin.3
+net tgtv  cia402.0.drv-target-velocity    => lcec.0.d4.srv-target-velocity
+net pcmd  pgen.out => cia402.0.pos-cmd sampler.0.pin.2
+net vcmd  vgen.out => cia402.0.velocity-cmd
+net pfb   cia402.0.pos-fb => sampler.0.pin.1
+net vfb   cia402.0.velocity-fb => sampler.0.pin.6
+# 10 rev/s = 600 rpm, 20 rev/s^2
+setp pgen.maxv 10
+setp pgen.maxa 20
+setp vgen.maxv 10
+setp vgen.maxa 20
+initf lcec.activate servo-thread
+addf lcec.read-all servo-thread
+addf cia402.0.read-all servo-thread
+addf pgen servo-thread
+addf vgen servo-thread
+addf cia402.0.write-all servo-thread
+addf lcec.write-all servo-thread
+addf sampler.0 servo-thread

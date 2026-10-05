@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<masters>
+  <master idx="0" appTimePeriod="1000000" refClockSyncCycles="-1">
+    <slave idx="0" type="IS620N" name="d0"/>
+    <slave idx="4" type="SV660" name="d4"/>
+  </master>
+</masters>
