@@ -182,6 +182,7 @@ typedef struct {
   uint64_t flags;                         ///< Flags, passed through to `proc_init` as `slave->flags`.
   const char *sourcefile;                 ///< Source filename, autopopulated.
   const lcec_submodule_desc_t *modules;   ///< Module types for modular slaves (bus couplers with `<subModule>`), or NULL
+  int conf_pdos;                          ///< Accepts `<syncManager>`/`<pdo>`/`<pdoEntry>` like `generic`; the driver decides what to do with them.
 } lcec_typelist_t;
 
 /// @brief Linked list for holding device type definitions.

@@ -733,8 +733,13 @@ int lcec_parse_config(void) {
           // generic slave
           slave->vid = slave_conf->vid;
           slave->pid = slave_conf->pid;
-          slave->generic_pdo_entry_count = slave_conf->pdoMappingCount;
           slave->proc_init = lcec_generic_init;
+        }
+
+        if (type == NULL || type->conf_pdos) {
+          // PDO map from the config: generic slaves, and typed slaves that
+          // accept one (the driver's init decides how to use it)
+          slave->generic_pdo_entry_count = slave_conf->pdoMappingCount;
 
           // alloc hal memory, one pin per mapped PDO entry. A slave without
           // mapped entries (e.g. an EK1100 coupler) has no pins and no HAL

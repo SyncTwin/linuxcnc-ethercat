@@ -912,9 +912,9 @@ static void parseSyncManagerAttrs(LCEC_CONF_XML_INST_T *inst, int next, const ch
   int tmp;
   LCEC_CONF_SYNCMANAGER_T *p;
 
-  // only allowed on generic slave
-  if (strcmp(state->currSlave->type_name, "generic")) {
-    fprintf(stderr, "%s: ERROR: syncManager is only allowed on generic slaves\n", modname);
+  // only allowed on generic slaves and on types that take their map from the config
+  if (strcmp(state->currSlave->type_name, "generic") && (state->currSlaveType == NULL || !state->currSlaveType->conf_pdos)) {
+    fprintf(stderr, "%s: ERROR: syncManager is only allowed on generic slaves and on slave types that accept a PDO map\n", modname);
     XML_StopParser(inst->parser, 0);
     return;
   }
