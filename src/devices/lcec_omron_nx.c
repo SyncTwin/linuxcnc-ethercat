@@ -215,41 +215,6 @@ static int lcec_omron_nx_read_mapping(lcec_slave_t *slave, uint16_t mapping_idx,
 }
 
 /// @brief Read a whole direction: every assigned PDO and all of its entries.
-///
-/// @param entries     Flat output array of all entries, in image order.
-/// @param pdos        Output array of the assigned PDO indices.
-/// @param pdo_first   Output: index into `entries` where each PDO starts.
-/// @param pdo_count   Output: number of entries in each PDO.
-/// @return Total number of entries, or a negative errno.
-static int lcec_omron_nx_scan(
-    lcec_slave_t *slave, uint16_t assign_idx, lcec_omron_nx_entry_t *entries, uint16_t *pdos, int *pdo_first, int *pdo_count, int *n_pdos) {
-  lcec_omron_nx_entry_t tmp[NX_MAX_PER_PDO];
-  int n_entries = 0;
-  int n, i, j;
-
-  n = lcec_omron_nx_read_assign(slave, assign_idx, pdos, NX_MAX_PDOS);
-  if (n < 0) return n;
-  *n_pdos = n;
-
-  for (i = 0; i < n; i++) {
-    int m = lcec_omron_nx_read_mapping(slave, pdos[i], tmp, NX_MAX_PER_PDO);
-
-    if (m < 0) return m;
-    if (n_entries + m > NX_MAX_ENTRIES) {
-      rtapi_print_msg(RTAPI_MSG_ERR, LCEC_MSG_PFX "slave %s.%s: more than %d mapping entries on 0x%04x\n", slave->master->name, slave->name,
-          NX_MAX_ENTRIES, assign_idx);
-      return -E2BIG;
-    }
-
-    pdo_first[i] = n_entries;
-    pdo_count[i] = m;
-    for (j = 0; j < m; j++) entries[n_entries++] = tmp[j];
-  }
-
-  return n_entries;
-}
-
-/// @brief Read a whole direction: every assigned PDO and all of its entries.
 static int lcec_omron_nx_scan(lcec_slave_t *slave, uint16_t assign_idx, lcec_omron_nx_map_t *map) {
   lcec_omron_nx_entry_t tmp[NX_MAX_PER_PDO];
   int n, i, j;
@@ -392,6 +357,7 @@ static void lcec_omron_nx_add_sync(lcec_syncs_t *syncs, ec_direction_t dir, ec_w
 }
 
 static int lcec_omron_nx_init(int comp_id, lcec_slave_t *slave) {
+  (void)comp_id;
   lcec_master_t *master = slave->master;
   static lcec_omron_nx_map_t out, in;  // _init runs once per slave, sequentially, in non-RT context
   lcec_omron_nx_data_t *hal_data;
