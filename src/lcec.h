@@ -377,6 +377,8 @@ typedef struct lcec_master {
   int initf_activated;  // Flag: activation happened via initf path (clean RT-context); when set, BANG-BANG PLL trim is skipped because
                         // app_phase was born stable
   int forgot_warned;    // One-shot guard for the "user forgot initf lcec.activate" warning in lcec_write_master
+  struct lcec_image_master_s *image;  ///< Process image ring of this master (lcec_image.c), NULL = off.
+  uint32_t image_wkc;                 ///< Working counter sum of the last receive, for the ring slot.
 #ifdef RTAPI_TASK_PLL_SUPPORT
   uint64_t dc_ref;
   uint64_t dc_ref_time;  // DC reference time (epoch) - set on first app_time call
@@ -384,6 +386,12 @@ typedef struct lcec_master {
   int dc_time_valid_last;  // Previous cycle's dc_time_valid (for detecting consecutive valid reads)
 #endif
 } lcec_master_t;
+
+// process image ring (lcec_image.c, layout lcec_image.h)
+int lcec_image_init(lcec_master_t *first);
+void lcec_image_activated(lcec_master_t *master);
+void lcec_image_publish(lcec_master_t *master, int64_t tick, uint64_t app_time, long long now);
+void lcec_image_exit(lcec_master_t *first);
 
 /// @brief Slave Distributed Clock configuration.
 typedef struct {

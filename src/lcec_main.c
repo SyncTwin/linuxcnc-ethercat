@@ -492,6 +492,9 @@ int rtapi_app_main(void) {
     }
   }
 
+  // process image ring: catalog and segment, after PDO registration of every master
+  lcec_image_init(first_master);
+
   // export read-all function
   rtapi_snprintf(name, HAL_NAME_LEN, "%s.read-all", LCEC_MODULE_NAME);
   if (LCEC_HAL_EXPORT_FUNCT(name, lcec_read_all, NULL, 0, 0, lcec_comp_id) != 0) {
@@ -1175,6 +1178,8 @@ void lcec_clear_config(void) {
   lcec_master_t *master, *prev_master;
   lcec_slave_t *slave, *prev_slave;
 
+  lcec_image_exit(first_master);
+
   // iterate all masters
   master = last_master;
   while (master != NULL) {
@@ -1408,6 +1413,7 @@ static int lcec_activate_master(lcec_master_t *master) {
         sync_unit->name, sync_unit->cycle_time, sync_unit->cycle_divider, sync_unit->phase, sync_unit->process_data_len);
   }
 
+  lcec_image_activated(master);
   master->activated = 1;
   rtapi_print_msg(RTAPI_MSG_INFO, LCEC_MSG_PFX "Master %s activated successfully\n", master->name);
 
@@ -1506,6 +1512,7 @@ void lcec_read_master(void *arg, long period) {
       all_domains_complete = 0;
     }
   }
+  master->image_wkc = domain_state.working_counter;
   domain_state.wc_state = all_domains_complete ? EC_WC_COMPLETE : (all_domains_zero ? EC_WC_ZERO : EC_WC_INCOMPLETE);
   dc_sync_diff = LCEC_PARAM_BIT_GET(master->hal_data->dc_sync_monitor) ? ecrt_master_sync_monitor_process(master->master) : 0xffffffffu;
   if (check_states) {
@@ -1767,6 +1774,11 @@ void lcec_write_master(void *arg, long period) {
   // send domain data
   ecrt_master_send(master->master);
   rtapi_mutex_give(&master->mutex);
+
+  // process image ring: outputs sent and inputs received in this cycle (the domain
+  // image is not touched again before the next receive); after the send, as the PLL
+  // below, to keep the copy off the frame's send time. next_tick already counts it.
+  lcec_image_publish(master, master->next_tick - 1, app_time, now);
 
 #ifdef RTAPI_TASK_PLL_SUPPORT
   // BANG-BANG controller for master thread PLL sync

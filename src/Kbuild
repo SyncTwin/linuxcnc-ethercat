@@ -2,4 +2,4 @@ obj-m += lcec.o
 
 lcec-common-objs := lcec_devicelist.o lcec_ethercat.o lcec_pins.o
 
-lcec-objs := lcec_main.o $(lcec-common-objs)
+lcec-objs := lcec_main.o lcec_image.o $(lcec-common-objs)
