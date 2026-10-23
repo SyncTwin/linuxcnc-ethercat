@@ -364,6 +364,25 @@ static int lcec_omron_nx_init(int comp_id, lcec_slave_t *slave) {
   lcec_syncs_t *syncs;
   int has_slot[NX_MAX_SLOTS + 1] = {0};
   int n_out, n_in, err;
+  ec_slave_info_t info;
+
+  if (ecrt_master_get_slave(master->master, slave->index, &info) != 0) {
+    // Optional slave (ETG.1020 hot connect): the station is not on the bus at
+    // load. The master and the other slaves run without it; its pins exist so
+    // the nets of the config hold, read zero, and nothing reaches the process
+    // image. There is no map to verify, so a station that shows up later gets
+    // no process data until the HAL session restarts with it present.
+    rtapi_print_msg(RTAPI_MSG_WARN, LCEC_MSG_PFX "slave %s.%s: NX station not on the bus, no process data in this session\n",
+        master->name, slave->name);
+    hal_data = LCEC_HAL_ALLOCATE(lcec_omron_nx_data_t);
+    if (hal_data == NULL) return -ENOMEM;
+    memset(hal_data, 0, sizeof(*hal_data));
+    hal_data->pins = (lcec_generic_pin_t *)slave->hal_data;
+    hal_data->n_pins = slave->generic_pdo_entry_count;
+    slave->hal_data = hal_data;
+    slave->sync_info = NULL;  // the declared map lacks the coupler's own PDOs: configure nothing
+    return lcec_generic_export_pins(slave, hal_data->pins, hal_data->n_pins);
+  }
 
   if (lcec_omron_nx_scan(slave, NX_RXPDO_ASSIGN, &out) < 0 || lcec_omron_nx_scan(slave, NX_TXPDO_ASSIGN, &in) < 0) {
     // Without the station's own map there is nothing honest to hand the

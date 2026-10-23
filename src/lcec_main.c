@@ -1748,11 +1748,13 @@ void lcec_write_master(void *arg, long period) {
   // re-queues the sync datagram and overwrites the received data).
   // Skip when free running: the ioctl fails there and the library prints
   // to stderr from this thread. R2M also has sync_to_ref_clock == 0, so
-  // both terms are needed.
+  // both terms are needed. Skip as well while no slave responds (drives off,
+  // link down): there is no reference clock yet, the thread runs on the system
+  // clock unsynced and the PLL waits for the first valid read.
 #ifdef RTAPI_TASK_PLL_SUPPORT
   uint32_t dc_time = 0;
   int dc_time_valid = 0;
-  if (master->sync_to_ref_clock || master->sync_ref_cycles) {
+  if ((master->sync_to_ref_clock || master->sync_ref_cycles) && master->ms.slaves_responding > 0) {
     dc_time_valid = (ecrt_master_reference_clock_time(master->master, &dc_time) == 0);
   }
 #endif

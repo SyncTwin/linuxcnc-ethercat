@@ -55,15 +55,23 @@ int lcec_generic_init(int comp_id, lcec_slave_t *slave) {
 /// (`conf_pdos`): they keep their own `hal_data` and hand the config's pins
 /// in here.
 int lcec_generic_init_pins(lcec_slave_t *slave, lcec_generic_pin_t *hal_data, int count) {
+  for (int i = 0; i < count; i++) {
+    lcec_pdo_init(slave, hal_data[i].pdo_idx, hal_data[i].pdo_sidx, &hal_data[i].pdo_os, &hal_data[i].pdo_bp);
+  }
+  return lcec_generic_export_pins(slave, hal_data, count);
+}
+
+/// @brief Export the HAL pins of `pins` without registering any PDO entry.
+///
+/// For a slave whose process data is not exchanged (an optional slave absent
+/// at load): the pins exist so the nets of the config hold, their values
+/// stay at zero, nothing reads or writes the process image for them.
+int lcec_generic_export_pins(lcec_slave_t *slave, lcec_generic_pin_t *hal_data, int count) {
   lcec_master_t *master = slave->master;
   int i, j;
   int err;
 
-  // initialize pins
   for (i = 0; i < count; i++, hal_data++) {
-    // PDO mapping
-    lcec_pdo_init(slave, hal_data->pdo_idx, hal_data->pdo_sidx, &hal_data->pdo_os, &hal_data->pdo_bp);
-
     switch (hal_data->type) {
       case HAL_BIT:
         if (hal_data->bitLength == 1) {
