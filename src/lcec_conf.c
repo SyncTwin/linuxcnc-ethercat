@@ -281,6 +281,8 @@ static void parseMasterAttrs(LCEC_CONF_XML_INST_T *inst, int next, const char **
   // divide-by-zero in lcec_main when computing DC phase, and gives
   // slaves a sensible sync0Cycle to copy from at proc_init time.
   p->appTimePeriod = 1000000;
+  // Auto restore OP is on unless the XML says otherwise (old configs keep it).
+  p->autoRestoreOp = 1;
   while (*attr) {
     const char *name = *(attr++);
     const char *val = *(attr++);
@@ -320,6 +322,20 @@ static void parseMasterAttrs(LCEC_CONF_XML_INST_T *inst, int next, const char **
     if (strcmp(name, "syncToRefClock") == 0) {
       p->syncToRefClock = (strcasecmp(val, "true") == 0) ? 1 : -1;  // -1 = Need to know if option was given
       continue;  // TODO: A general function that can handle four states: yes, no, not given, wrong. Recognize yes/on/true/1/enabled as true
+    }
+
+    // parse autoRestoreOp
+    if (strcmp(name, "autoRestoreOp") == 0) {
+      if (strcasecmp(val, "true") == 0) {
+        p->autoRestoreOp = 1;
+      } else if (strcasecmp(val, "false") == 0) {
+        p->autoRestoreOp = 0;
+      } else {
+        fprintf(stderr, "%s: ERROR: Invalid master autoRestoreOp value %s (true or false)\n", modname, val);
+        XML_StopParser(inst->parser, 0);
+        return;
+      }
+      continue;
     }
 
     // handle error

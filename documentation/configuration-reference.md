@@ -79,6 +79,12 @@ and some of which are required:
   they must agree, otherwise the parser errors out. (See
   [#471](https://github.com/linuxcnc-ethercat/linuxcnc-ethercat/issues/471)
   for the deprecation discussion.)
+- `autoRestoreOp="true|false"`: (optional, defaults to `true`) when a
+  slave is online and configured but stays out of OP for 1 s (e.g. it
+  refused OP and the IgH master set its error flag), lcec calls
+  `ecrt_master_reset()` once per second until it is back in OP. One
+  WARN line when that starts, one when OP is back. `false` leaves a
+  slave that dropped out of OP alone until a rescan or HAL restart.
 
 Generally, for "normal" systems with DC-sync'd drives, this will look like
 

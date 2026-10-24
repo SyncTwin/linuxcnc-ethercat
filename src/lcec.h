@@ -380,6 +380,8 @@ typedef struct lcec_master {
   ec_master_state_t ms;
   long long op_lost_since;  ///< rtapi time since an online configured slave is out of OP, 0 = all online slaves in OP
   long long op_reset_last;  ///< rtapi time of the last ecrt_master_reset() (auto restore), 0 = never
+  int auto_restore_op;      ///< XML <master autoRestoreOp>: 1 = auto restore OP (default), 0 = off
+  int op_reset_count;       ///< ecrt_master_reset() calls of the current out-of-OP event, 0 = no event
   int activated;        // Flag: master has been activated (0=not yet, 1=activated)
   int initf_activated;  // Flag: activation happened via initf path (clean RT-context); when set, BANG-BANG PLL trim is skipped because
                         // app_phase was born stable

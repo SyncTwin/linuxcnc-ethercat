@@ -652,6 +652,11 @@ int lcec_parse_config(void) {
         //   true: DC is clock source, servo thread syncs to DC via PLL
         // Note: legacy mode - negative refClockSyncCycles enables sync_to_ref_clock
         master->sync_to_ref_clock = master_conf->syncToRefClock;
+        master->auto_restore_op = master_conf->autoRestoreOp;
+        if (!master->auto_restore_op) {
+          rtapi_print_msg(RTAPI_MSG_INFO, LCEC_MSG_PFX "master %s: autoRestoreOp off, a slave out of OP stays out of OP\n",
+              master->name);
+        }
 
         // add master to list
         LCEC_LIST_APPEND(first_master, last_master, master);
@@ -1444,15 +1449,28 @@ static int lcec_activate_master(lcec_master_t *master) {
 /// LCEC_AUTO_RESTORE_PERIOD; a slave still being brought up is not disturbed
 /// by the reset (requested state stays OP). A slave absent from the bus
 /// (optional slave, no ec_slave attached) is not online and never counts.
+///
+/// Per master: XML `<master autoRestoreOp="false">` turns it off (default on).
+/// One WARN when an event starts (first reset), one when it ends (all online
+/// slaves in OP again, or link down); the resets in between are silent.
 static void lcec_auto_restore_op(lcec_master_t *master, int not_op) {
   long long now;
   int ret;
 
-  if (not_op == 0 || !master->ms.link_up) {
-    master->op_lost_since = 0;
+  if (!master->auto_restore_op) {
     return;
   }
   now = rtapi_get_time();
+  if (not_op == 0 || !master->ms.link_up) {
+    if (master->op_reset_count > 0) {
+      rtapi_print_msg(RTAPI_MSG_WARN, LCEC_MSG_PFX "master %s: autoRestoreOp: %s %lld ms after the loss, %d reset(s)\n", master->name,
+          master->ms.link_up ? "OP restored" : "link down, gave up", (now - master->op_lost_since) / 1000000LL, master->op_reset_count);
+    }
+    master->op_lost_since = 0;
+    master->op_reset_last = 0;
+    master->op_reset_count = 0;
+    return;
+  }
   if (master->op_lost_since == 0) {
     master->op_lost_since = now;
     return;
@@ -1467,8 +1485,11 @@ static void lcec_auto_restore_op(lcec_master_t *master, int not_op) {
   rtapi_mutex_get(&master->mutex);
   ret = ecrt_master_reset(master->master);
   rtapi_mutex_give(&master->mutex);
-  rtapi_print_msg(RTAPI_MSG_WARN, LCEC_MSG_PFX "master %s: %d slave(s) online but not in OP, ecrt_master_reset() -> %d\n", master->name,
-      not_op, ret);
+  if (master->op_reset_count++ == 0) {
+    rtapi_print_msg(RTAPI_MSG_WARN,
+        LCEC_MSG_PFX "master %s: autoRestoreOp: %d slave(s) online but not in OP, ecrt_master_reset() each %lld ms (first -> %d)\n",
+        master->name, not_op, LCEC_AUTO_RESTORE_PERIOD / 1000000LL, ret);
+  }
 }
 
 /// @brief Read all input pins on a master and its slaves.

@@ -80,6 +80,7 @@ typedef struct {
   int refClockSyncCycles;
   int syncToRefClock;
   int refClockSlaveIdx;
+  int autoRestoreOp;  ///< 1 = auto restore OP of slaves the master gave up on (default), 0 = off
   char name[LCEC_CONF_STR_MAXLEN];
 } LCEC_CONF_MASTER_T;
 
