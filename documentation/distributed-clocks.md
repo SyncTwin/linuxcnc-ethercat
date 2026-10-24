@@ -87,15 +87,18 @@ and three hal pins are available.
 
 Hal parameters
 - `pll-step="<n>" RW`. The adjustment step in nanoseconds. Default 0.1% of appTimePeriod.
-- `pll-max-error="<n>" RW`. Max allowed time difference between the servo thread and
-  the reference clock in nanoseconds before a reset. Default one appTimePeriod.
+- `pll-max-err="<n>" RW`. Max allowed physical offset between the servo thread and
+  the reference clock (`dc-ref-err`) in nanoseconds before a reset. Default one
+  appTimePeriod; the effective threshold is capped at half an appTimePeriod.
 
 Hal pins
 - `pll-err="<n>" OUT`. The current time difference between the servo thread
   and the reference clock in nanoseconds.
 - `pll-out="<n>" OUT`. Current output correction, will always be +/-pll-step.
-- `pll-reset-count="<n>" OUT`. Number of times pll-err has been larger
-  than pll-max-error.
+- `pll-reset-count="<n>" OUT`. Number of resets: times the physical offset
+  `dc-ref-err` (not the folded `pll-err`) exceeded the effective `pll-max-err`
+  threshold. Each reset shifts the master time by whole periods and skips one
+  control cycle.
 
 `pll-err` varies up and down. `pll-reset-count`should be kept low.
 If `pll-reset-count` increases, the difference in speed between
