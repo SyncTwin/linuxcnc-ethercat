@@ -79,6 +79,10 @@ extern "C" {
 
 // State update period (ns)
 #define LCEC_STATE_UPDATE_PERIOD 1000000000LL
+// Auto restore of OP (like TwinCAT "Auto Restore States"): minimum time a slave
+// stays out of OP before ecrt_master_reset(), and minimum time between resets.
+/* Owner decision 2026-10-24: convention, not a measurement */
+#define LCEC_AUTO_RESTORE_PERIOD 1000000000LL
 
 // Consecutive missing DC sync monitor datagrams tolerated before the
 // dc-sync pins are invalidated (see lcec_read_master)
@@ -374,6 +378,8 @@ typedef struct lcec_master {
   int sync_to_ref_clock;
   long long state_update_timer;
   ec_master_state_t ms;
+  long long op_lost_since;  ///< rtapi time since an online configured slave is out of OP, 0 = all online slaves in OP
+  long long op_reset_last;  ///< rtapi time of the last ecrt_master_reset() (auto restore), 0 = never
   int activated;        // Flag: master has been activated (0=not yet, 1=activated)
   int initf_activated;  // Flag: activation happened via initf path (clean RT-context); when set, BANG-BANG PLL trim is skipped because
                         // app_phase was born stable

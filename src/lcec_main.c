@@ -1425,12 +1425,59 @@ static int lcec_activate_master(lcec_master_t *master) {
   return 0;
 }
 
+/// @brief Auto restore of OP for slaves the master gave up on.
+///
+/// A slave that refuses a state change (e.g. OP -> SAFEOP+ERR, AL status code
+/// 0x001B/0x0018 when its inputs stop, ETG.1000.6) gets error_flag set by the
+/// IgH master (master/fsm_change.c, "slave refused state change"), and the
+/// master FSM never requests OP for it again while the flag is set
+/// (master/fsm_master.c: `... && !slave->error_flag`). The slave stays out of
+/// OP until a rescan or a HAL restart, even when its cause is gone.
+/// ecrt_master_reset() is the IgH call for this case: for every config with an
+/// attached slave it requests OP and clears error_flag (master/master.c
+/// ecrt_master_reset -> master/slave.c ec_slave_request_state). It is rt_safe
+/// (ecrt.h apiusage): the ioctl only schedules the work (master/ioctl.c
+/// ec_ioctl_reset).
+///
+/// The AL error bit is not visible here (ec_slave_config_state_t.al_state has
+/// 4 bits), so the trigger is "online, configured, not operational" held for
+/// LCEC_AUTO_RESTORE_PERIOD; a slave still being brought up is not disturbed
+/// by the reset (requested state stays OP). A slave absent from the bus
+/// (optional slave, no ec_slave attached) is not online and never counts.
+static void lcec_auto_restore_op(lcec_master_t *master, int not_op) {
+  long long now;
+  int ret;
+
+  if (not_op == 0 || !master->ms.link_up) {
+    master->op_lost_since = 0;
+    return;
+  }
+  now = rtapi_get_time();
+  if (master->op_lost_since == 0) {
+    master->op_lost_since = now;
+    return;
+  }
+  if (now - master->op_lost_since < LCEC_AUTO_RESTORE_PERIOD) {
+    return;
+  }
+  if (master->op_reset_last != 0 && now - master->op_reset_last < LCEC_AUTO_RESTORE_PERIOD) {
+    return;
+  }
+  master->op_reset_last = now;
+  rtapi_mutex_get(&master->mutex);
+  ret = ecrt_master_reset(master->master);
+  rtapi_mutex_give(&master->mutex);
+  rtapi_print_msg(RTAPI_MSG_WARN, LCEC_MSG_PFX "master %s: %d slave(s) online but not in OP, ecrt_master_reset() -> %d\n", master->name,
+      not_op, ret);
+}
+
 /// @brief Read all input pins on a master and its slaves.
 void lcec_read_master(void *arg, long period) {
   lcec_master_t *master = (lcec_master_t *)arg;
   lcec_slave_t *slave;
   lcec_sync_unit_t *sync_unit;
   int check_states;
+  int not_op = 0;
 
   // Master not yet activated: process_data is NULL until lcec_activate_master()
   // runs. On new (initf-capable) linuxcnc loaded with a legacy .hal that omits
@@ -1600,6 +1647,9 @@ void lcec_read_master(void *arg, long period) {
     rtapi_mutex_give(&master->mutex);
     if (check_states) {
       lcec_update_slave_state_hal(slave->hal_state_data, &slave->state);
+      if (slave->state.online && !slave->state.operational) {
+        not_op++;
+      }
     }
 
     // process read function; drivers of a threaded unit run in its thread
@@ -1608,6 +1658,10 @@ void lcec_read_master(void *arg, long period) {
       master->process_data_len = slave->sync_unit->process_data_len;
       slave->proc_read(slave, slave->sync_unit->cycle_time);
     }
+  }
+
+  if (check_states) {
+    lcec_auto_restore_op(master, not_op);
   }
 
   for (sync_unit = master->first_sync_unit; sync_unit != NULL; sync_unit = sync_unit->next) {
