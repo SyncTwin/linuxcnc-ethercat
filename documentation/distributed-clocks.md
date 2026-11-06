@@ -74,6 +74,31 @@ master-to-reference push is not performed at all. Inter-slave clock
 distribution runs every cycle unconditionally via
 `ecrt_master_sync_slave_clocks()` and is not configurable here.
 
+### Several masters in one thread
+
+`rtapi_task_pll_set_correction()` holds one correction per HAL thread.
+Two masters in `lcec.write-all` both compute a correction and the one
+that writes last wins every cycle, so an M2R master listed first is
+not phase-locked at all: its `dc-ref-err` drifts away at the quartz
+difference of the two buses and `pll-reset-count` climbs in bursts
+while `dc-phased` of the last master stays true.  A thread has one
+time source (TwinCAT: one device in "DC bus shift", the rest in
+"master shift"; IgH: one `app_time` per task), so lcec lets exactly
+one master steer each thread:
+
+- `<master pllOwner="true">` steers; `pllOwner="false"` never does,
+  its PLL pins still show what it would have applied;
+- no attribute: the first master to write in the thread steers it, a
+  later master of the thread with `pllOwner="true"` takes over, and
+  masters sharing the thread without a named owner log one WARN;
+- two `pllOwner="true"` in one thread: ERR, the second does not steer.
+
+`lcec.<m>.pll-owner` shows who steers.  The usual layout is the
+master with real DC slaves M2R and `pllOwner="true"`, every other
+master of the thread R2M (positive `refClockSyncCycles`: it pushes the
+thread's `app_time` into its own reference clock) with
+`pllOwner="false"`.
+
 ### `syncToRefClock` (alternate spelling)
 
 `syncToRefClock="true|false"` is an older equivalent of the sign of

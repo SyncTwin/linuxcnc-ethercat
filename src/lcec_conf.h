@@ -81,6 +81,7 @@ typedef struct {
   int syncToRefClock;
   int refClockSlaveIdx;
   int autoRestoreOp;  ///< 1 = auto restore OP of slaves the master gave up on (default), 0 = off
+  int pllOwner;       ///< XML pllOwner: 1 = this master's PLL steers its thread period, 0 = never, -1 = not given
   char name[LCEC_CONF_STR_MAXLEN];
 } LCEC_CONF_MASTER_T;
 

@@ -70,6 +70,7 @@ static const lcec_pindesc_t master_pins[] = {
     {HAL_S32, HAL_IN, offsetof(lcec_master_data_t, pll_drift), "%s.pll-drift"},
     {HAL_S32, HAL_OUT, offsetof(lcec_master_data_t, pll_final), "%s.pll-final"},
     {HAL_S32, HAL_OUT, offsetof(lcec_master_data_t, dc_ref_err), "%s.dc-ref-err"},
+    {HAL_BIT, HAL_OUT, offsetof(lcec_master_data_t, pll_owner), "%s.pll-owner"},
 #endif
     {HAL_U32, HAL_OUT, offsetof(lcec_master_data_t, wkc), "%s.wkc"},
     {HAL_U32, HAL_OUT, offsetof(lcec_master_data_t, wkc_min), "%s.wkc-min"},
@@ -643,6 +644,9 @@ int lcec_parse_config(void) {
         // initialize master
         master->index = master_conf->index;
         master->bus_task = -1;
+        master->pll_task = -1;
+        master->pll_owner = 0;
+        master->pll_owner_conf = master_conf->pllOwner;
         strncpy(master->name, master_conf->name, LCEC_CONF_STR_MAXLEN);
         master->name[LCEC_CONF_STR_MAXLEN - 1] = 0;
         master->app_time_period = master_conf->appTimePeriod;
@@ -1692,6 +1696,74 @@ void lcec_read_master(void *arg, long period) {
   }
 }
 
+#ifdef RTAPI_TASK_PLL_SUPPORT
+/// @brief Decide whether this master's PLL may steer the period of the thread
+/// running its write funct.  Called once per master, from that thread, on its
+/// first write.
+///
+/// rtapi_task_pll_set_correction() is one value per task: when several
+/// masters write in one thread (lcec.write-all, or their write functs addf'd
+/// to the same thread) the last caller of a cycle silently wins and the
+/// others' corrections are lost -- an M2R master of a live bus then follows
+/// whatever the last master computed, its dc-ref-err drifts and pll-reset-count
+/// bursts.  A task has exactly one time source (TwinCAT: one device in "bus
+/// shift", the others "master shift"; IgH: one app_time per task), so exactly
+/// one master per thread steers it:
+///   - <master pllOwner="true">  claims the thread; a second explicit owner in
+///     the same thread is an error and does not take it;
+///   - <master pllOwner="false"> never steers; its PLL pins still show what it
+///     would have applied;
+///   - no attribute: the first master to write in the thread steers it unless
+///     a later master of the thread is an explicit owner (that one takes over).
+/// Masters sharing a thread without a named owner get one WARN naming the
+/// steering master, so a config with two M2R masters in one thread is loud.
+static void lcec_master_claim_pll(lcec_master_t *master) {
+  lcec_master_t *m, *owner = NULL;
+
+  master->pll_task = rtapi_task_self();
+  master->pll_owner = 0;
+
+  for (m = first_master; m != NULL; m = m->next) {
+    if (m != master && m->pll_task >= 0 && m->pll_task == master->pll_task && m->pll_owner) {
+      owner = m;
+    }
+  }
+
+  if (master->pll_owner_conf == 0) {
+    rtapi_print_msg(RTAPI_MSG_INFO, LCEC_MSG_PFX "master %s: pllOwner=false, its PLL does not steer the thread period%s%s\n", master->name,
+        owner ? "; the thread is steered by master " : "", owner ? owner->name : "");
+    return;
+  }
+
+  if (owner == NULL) {
+    master->pll_owner = 1;
+    rtapi_print_msg(RTAPI_MSG_INFO, LCEC_MSG_PFX "master %s steers the period of its thread (pllOwner=%s)\n", master->name,
+        master->pll_owner_conf > 0 ? "true" : "not given, first master of the thread");
+    return;
+  }
+
+  if (master->pll_owner_conf > 0) {
+    if (owner->pll_owner_conf > 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR,
+          LCEC_MSG_PFX "master %s: pllOwner=true, but master %s already steers this thread with pllOwner=true; one owner per thread, "
+                       "master %s does not steer\n",
+          master->name, owner->name, master->name);
+      return;
+    }
+    owner->pll_owner = 0;
+    master->pll_owner = 1;
+    rtapi_print_msg(RTAPI_MSG_WARN, LCEC_MSG_PFX "master %s (pllOwner=true) takes the thread period over from master %s (pllOwner not given)\n",
+        master->name, owner->name);
+    return;
+  }
+
+  rtapi_print_msg(RTAPI_MSG_WARN,
+      LCEC_MSG_PFX "master %s shares its thread with master %s, which steers the thread period; master %s's PLL correction is not applied "
+                   "(set pllOwner on the masters to choose)\n",
+      master->name, owner->name, master->name);
+}
+#endif
+
 /// @brief Write all output pins on a master and its slaves.
 void lcec_write_master(void *arg, long period) {
   lcec_master_t *master = (lcec_master_t *)arg;
@@ -2129,8 +2201,16 @@ void lcec_write_master(void *arg, long period) {
     }
   }
 
+  // one master per thread applies its correction (lcec_master_claim_pll);
+  // the others publish pll-final and leave the task period alone
+  if (master->pll_task < 0) {
+    lcec_master_claim_pll(master);
+  }
   LCEC_PIN_S32_SET(hal_data->pll_final, pll_correction);
-  rtapi_task_pll_set_correction(pll_correction);
+  LCEC_PIN_BIT_SET(hal_data->pll_owner, master->pll_owner);
+  if (master->pll_owner) {
+    rtapi_task_pll_set_correction(pll_correction);
+  }
 
   master->app_time_last = (uint32_t)app_time;
   master->dc_time_valid_last = dc_time_valid;

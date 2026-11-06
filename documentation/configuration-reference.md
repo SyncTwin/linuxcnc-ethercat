@@ -85,6 +85,17 @@ and some of which are required:
   `ecrt_master_reset()` once per second until it is back in OP. One
   WARN line when that starts, one when OP is back. `false` leaves a
   slave that dropped out of OP alone until a rescan or HAL restart.
+- `pllOwner="true|false"`: (optional) which master's PLL steers the
+  period of the HAL thread its write funct runs in. The RTAPI period
+  correction is one value per thread, so when several masters write in
+  the same thread (`lcec.write-all`, or their `write` functs on one
+  thread) only one of them may apply it; without this attribute the
+  first master of the thread does and the others log a WARN. Give
+  `pllOwner="true"` to the master whose bus the thread must follow
+  (the one with real DC slaves, M2R) and `pllOwner="false"` to the
+  others; a second `true` in the same thread is an error. Each master
+  exports `lcec.<m>.pll-owner`. See
+  [Distributed Clocks](distributed-clocks.md#several-masters-in-one-thread).
 
 Generally, for "normal" systems with DC-sync'd drives, this will look like
 

@@ -223,6 +223,7 @@ typedef struct lcec_master_data {
   hal_s32_t *pll_drift;         // Input: debug offset added to PLL correction (ns)
   hal_s32_t *pll_final;         // Output: final PLL correction value sent to rtapi (ns)
   hal_s32_t *dc_ref_err;        // Output: raw app_time vs DC reference clock offset (ns), diagnostic only
+  hal_bit_t *pll_owner;         // Output: this master's PLL steers the period of the thread running its write funct
   int32_t auto_drift_delay;     // Internal: auto-drift delay counter
   int32_t phase_locked;         // Internal: instantaneous phase-lock state (hysteresis)
   int32_t phase_lock_cnt;       // Internal: consecutive locked cycles (dc-phased dwell)
@@ -367,6 +368,9 @@ typedef struct lcec_master {
   int64_t next_tick;  ///< Grid index of the tick the next write sends; tick 0 is the activation app time.
   lcec_su_tick_t tick;  ///< Latest bus tick, for Sync Unit threads phase-locking to it.
   int bus_task;         ///< rtapi task id of the thread running the master's read funct.
+  int pll_task;         ///< rtapi task id of the thread running the master's write funct, -1 = not run yet.
+  int pll_owner_conf;   ///< XML <master pllOwner>: 1 = steer the thread, 0 = never, -1 = not given (first master of the thread).
+  int pll_owner;        ///< 1 = this master's PLL correction is applied to its thread (lcec_master_claim_pll).
   lcec_slave_t *first_slave;
   lcec_slave_t *last_slave;
   lcec_master_data_t *hal_data;

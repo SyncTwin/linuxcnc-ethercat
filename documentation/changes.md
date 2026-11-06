@@ -18,6 +18,12 @@ This list should only include deliberate breakage, not typical bugs.
 
 ## Pending
 
+- Only one master per HAL thread applies its PLL correction to the
+  thread period (`rtapi_task_pll_set_correction()` is one value per
+  thread; before, the last master written in a cycle silently won).
+  Without `<master pllOwner="true|false">` the first master of the
+  thread steers and the others log one WARN; configs with a single
+  master are unchanged.  New pin `lcec.<m>.pll-owner`.
 - Sync Units slower than the master cycle are now exchanged on fixed
   cycles of the DC grid (see `syncUnitPhase`) instead of counting from
   the cycle the bus first reached OP, so their position relative to
