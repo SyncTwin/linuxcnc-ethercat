@@ -1704,7 +1704,7 @@ void lcec_read_master(void *arg, long period) {
     int all_op = 1;
     if (__atomic_load_n(&sync_unit->started, __ATOMIC_ACQUIRE)) continue;
     for (slave = master->first_slave; slave; slave = slave->next) {
-      if (slave->sync_unit == sync_unit && !slave->quarantined && !slave->state.operational) all_op = 0;
+      if (slave->sync_unit == sync_unit && !slave->quarantined && slave->state.online && !slave->state.operational) all_op = 0;
     }
     if (sync_unit->pdo_entry_count == 0 ||
         (all_op && sync_unit->process && sync_unit->state.wc_state == EC_WC_COMPLETE)) {

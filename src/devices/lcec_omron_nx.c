@@ -74,7 +74,8 @@
 /// NX Unit n, bit 0 = the coupler (W519-E1-15, A-7-6 p. A-45, p. 9-18), is in
 /// TxPDO 0x1bf8 of a stock NX-ECC202.  When it is in the read map the driver
 /// publishes `coupler-io-active` (bit 0) and `slot<S>.io-active` (bit S) for
-/// every declared slot.  If it is not mapped, no io-active pins are created.
+/// every declared slot.  If it is not mapped, the pins (always exported,
+/// NX_STATION_QUALITY_ABI) stay FALSE and `coupler-valid` never turns TRUE.
 
 #include <stdio.h>
 
@@ -258,7 +259,7 @@ static int lcec_omron_nx_slot(uint16_t pdo) {
 
 /// @brief Check the declared unit PDOs of one direction against the read map.
 ///
-/// @return 0 when they are the same set with the same entries, -EINVAL otherwise.
+/// @return the number of declared PDOs when they are the same set with the same entries, -ESTALE on a mismatch (quarantine), -EINVAL for a non-unit PDO in the config.
 static int lcec_omron_nx_verify(lcec_slave_t *slave, const ec_sync_info_t *sm, const lcec_omron_nx_map_t *map, int *has_slot) {
   lcec_master_t *master = slave->master;
   int i, j, k, declared = 0;
