@@ -92,9 +92,11 @@
 #define NX_MAX_PER_PDO  64  ///< Mapping entries in a single 0x16xx/0x1axx.
 #define NX_UNIT_RXPDO   0x1600  ///< First unit RxPDO (slot 1).
 #define NX_UNIT_TXPDO   0x1a00  ///< First unit TxPDO (slot 1).
-#define NX_UNIT_PDO_SPAN 0x100  ///< Unit PDO range per direction.
+// W519-E1-15 A-7-3, p. A-28: unit numbers 1..125, four PDOs per unit.
+// This is the address domain; physical NX-ECC20x capacity is 63 (3-1-2).
+#define NX_MAX_SLOTS 125
 #define NX_PDO_SLOT_STEP 4      ///< PDOs per slot (ESI DependOnSlot, NX-ECC20x).
-#define NX_MAX_SLOTS (NX_UNIT_PDO_SPAN / NX_PDO_SLOT_STEP)  ///< Slots one range holds.
+#define NX_UNIT_PDO_SPAN (NX_MAX_SLOTS * NX_PDO_SLOT_STEP)
 #define NX_IO_ACTIVE_IDX  0x3006  ///< NX Unit I/O Data Active Status (W519 A-7-6).
 #define NX_IO_ACTIVE_SIDX 0x04    ///< Subindex 04: 125 units, 128 bits, bit n = unit n.
 
@@ -149,20 +151,21 @@ ADD_TYPES(types);
 static int lcec_omron_nx_read_assign(lcec_slave_t *slave, uint16_t assign_idx, uint16_t *out, int max) {
   uint8_t count;
   int n = 0;
+  int err;
 
-  if (lcec_read_sdo8(slave, assign_idx, 0x00, &count) != 0) {
+  if ((err = lcec_read_sdo8(slave, assign_idx, 0x00, &count)) != 0) {
     rtapi_print_msg(
         RTAPI_MSG_ERR, LCEC_MSG_PFX "slave %s.%s: failed reading PDO assignment 0x%04x:00\n", slave->master->name, slave->name, assign_idx);
-    return -EIO;
+    return err;
   }
 
-  for (uint8_t i = 1; i <= count; i++) {
+  for (unsigned int i = 1; i <= count; i++) {
     uint16_t pdo;
 
-    if (lcec_read_sdo16(slave, assign_idx, i, &pdo) != 0) {
+    if ((err = lcec_read_sdo16(slave, assign_idx, i, &pdo)) != 0) {
       rtapi_print_msg(
           RTAPI_MSG_ERR, LCEC_MSG_PFX "slave %s.%s: failed reading 0x%04x:%02x\n", slave->master->name, slave->name, assign_idx, i);
-      return -EIO;
+      return err;
     }
     if (pdo == 0) continue;
 
@@ -189,11 +192,12 @@ static int lcec_omron_nx_read_assign(lcec_slave_t *slave, uint16_t assign_idx, u
 /// @return Number of entries, or a negative errno.
 static int lcec_omron_nx_read_mapping(lcec_slave_t *slave, uint16_t mapping_idx, lcec_omron_nx_entry_t *out, int max) {
   uint8_t count;
+  int err;
 
-  if (lcec_read_sdo8(slave, mapping_idx, 0x00, &count) != 0) {
+  if ((err = lcec_read_sdo8(slave, mapping_idx, 0x00, &count)) != 0) {
     rtapi_print_msg(
         RTAPI_MSG_ERR, LCEC_MSG_PFX "slave %s.%s: failed reading PDO mapping 0x%04x:00\n", slave->master->name, slave->name, mapping_idx);
-    return -EIO;
+    return err;
   }
 
   if (count > max) {
@@ -205,10 +209,10 @@ static int lcec_omron_nx_read_mapping(lcec_slave_t *slave, uint16_t mapping_idx,
   for (uint8_t i = 0; i < count; i++) {
     uint32_t raw;
 
-    if (lcec_read_sdo32(slave, mapping_idx, i + 1, &raw) != 0) {
+    if ((err = lcec_read_sdo32(slave, mapping_idx, i + 1, &raw)) != 0) {
       rtapi_print_msg(
           RTAPI_MSG_ERR, LCEC_MSG_PFX "slave %s.%s: failed reading 0x%04x:%02x\n", slave->master->name, slave->name, mapping_idx, i + 1);
-      return -EIO;
+      return err;
     }
 
     out[i].idx = (uint16_t)(raw >> 16);
@@ -420,12 +424,15 @@ static int lcec_omron_nx_init(int comp_id, lcec_slave_t *slave) {
     return lcec_omron_nx_quarantine(slave, "station not on the bus at load");
   }
 
-  if (lcec_omron_nx_scan(slave, NX_RXPDO_ASSIGN, &out) < 0 || lcec_omron_nx_scan(slave, NX_TXPDO_ASSIGN, &in) < 0) {
-    // Without the station's own map there is nothing honest to hand the
-    // master: on an NX station a wrong output bit moves real hardware.
-    rtapi_print_msg(RTAPI_MSG_ERR, LCEC_MSG_PFX "slave %s.%s: could not read the station's PDO map over CoE\n", master->name, slave->name);
-    return -EIO;
-  }
+  // IgH 1.6.10 c4b4ac4 lib/master.c ecrt_master_sdo_upload preserves errno.
+  // Only an unreadable device map is quarantined; resource/config errors
+  // must still fail init. The SDO reader logs the object, errno and abort.
+  err = lcec_omron_nx_scan(slave, NX_RXPDO_ASSIGN, &out);
+  if (err == -EIO) return lcec_omron_nx_quarantine(slave, "station PDO map unreadable over CoE (output assignment/map, EIO)");
+  if (err < 0) return err;
+  err = lcec_omron_nx_scan(slave, NX_TXPDO_ASSIGN, &in);
+  if (err == -EIO) return lcec_omron_nx_quarantine(slave, "station PDO map unreadable over CoE (input assignment/map, EIO)");
+  if (err < 0) return err;
 
   n_out = lcec_omron_nx_verify(slave, lcec_omron_nx_declared(slave, EC_DIR_OUTPUT), &out, has_slot);
   if (n_out == -ESTALE) return lcec_omron_nx_quarantine(slave, "output module PDO assignment/map differs from config");

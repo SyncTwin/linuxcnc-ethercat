@@ -172,22 +172,23 @@ int lcec_syncs_add_pdo_entry(lcec_syncs_t *syncs, uint16_t index, uint8_t subind
 }
 
 /// @brief Read an SDO configuration from a slave device.
+/// @return 0 on success, IgH negative errno on failure, -EIO for a wrong response size.
 int lcec_read_sdo(lcec_slave_t *slave, uint16_t index, uint8_t subindex, uint8_t *target, size_t size) {
   lcec_master_t *master = slave->master;
   int err;
   size_t result_size;
-  uint32_t abort_code;
+  uint32_t abort_code = 0;
 
   if ((err = ecrt_master_sdo_upload(master->master, slave->index, index, subindex, target, size, &result_size, &abort_code))) {
     rtapi_print_msg(RTAPI_MSG_ERR, LCEC_MSG_PFX "slave %s.%s: Failed to execute SDO upload (0x%04x:0x%02x, error %d, abort_code %08x)\n",
         master->name, slave->name, index, subindex, err, abort_code);
-    return -1;
+    return err;
   }
 
   if (result_size != size) {
     rtapi_print_msg(RTAPI_MSG_ERR, LCEC_MSG_PFX "slave %s.%s: Invalid result size on SDO upload (0x%04x:0x%02x, req: %u, res: %u)\n",
         master->name, slave->name, index, subindex, (unsigned int)size, (unsigned int)result_size);
-    return -1;
+    return -EIO;
   }
 
   return 0;
@@ -212,6 +213,7 @@ int lcec_read_sdo8(lcec_slave_t *slave, uint16_t index, uint8_t subindex, uint8_
 int lcec_read_sdo16(lcec_slave_t *slave, uint16_t index, uint8_t subindex, uint16_t *result) {
   uint8_t data[2];
   int err = lcec_read_sdo(slave, index, subindex, data, 2);
+  if (err) return err;
   *result = EC_READ_U16(data);
 
   return err;
@@ -226,6 +228,7 @@ int lcec_read_sdo16(lcec_slave_t *slave, uint16_t index, uint8_t subindex, uint1
 int lcec_read_sdo32(lcec_slave_t *slave, uint16_t index, uint8_t subindex, uint32_t *result) {
   uint8_t data[4];
   int err = lcec_read_sdo(slave, index, subindex, data, 4);
+  if (err) return err;
   *result = EC_READ_U32(data);
 
   return err;
@@ -245,6 +248,7 @@ int lcec_read_sdo32(lcec_slave_t *slave, uint16_t index, uint8_t subindex, uint3
 int lcec_read_sdo8_pin_U32(lcec_slave_t *slave, uint16_t index, uint8_t subindex, volatile uint32_t *result) {
   uint8_t data;
   int err = lcec_read_sdo(slave, index, subindex, &data, 1);
+  if (err) return err;
   *result = data;
 
   return err;
@@ -264,6 +268,7 @@ int lcec_read_sdo8_pin_U32(lcec_slave_t *slave, uint16_t index, uint8_t subindex
 int lcec_read_sdo8_pin_S32(lcec_slave_t *slave, uint16_t index, uint8_t subindex, volatile int32_t *result) {
   uint8_t data;
   int err = lcec_read_sdo(slave, index, subindex, &data, 1);
+  if (err) return err;
   *result = data;
 
   return err;
@@ -283,6 +288,7 @@ int lcec_read_sdo8_pin_S32(lcec_slave_t *slave, uint16_t index, uint8_t subindex
 int lcec_read_sdo16_pin_U32(lcec_slave_t *slave, uint16_t index, uint8_t subindex, volatile uint32_t *result) {
   uint8_t data[2];
   int err = lcec_read_sdo(slave, index, subindex, data, 2);
+  if (err) return err;
   *result = EC_READ_U16(data);
 
   return err;
@@ -302,6 +308,7 @@ int lcec_read_sdo16_pin_U32(lcec_slave_t *slave, uint16_t index, uint8_t subinde
 int lcec_read_sdo16_pin_S32(lcec_slave_t *slave, uint16_t index, uint8_t subindex, volatile int32_t *result) {
   uint8_t data[2];
   int err = lcec_read_sdo(slave, index, subindex, data, 2);
+  if (err) return err;
   *result = EC_READ_S16(data);
 
   return err;
@@ -321,6 +328,7 @@ int lcec_read_sdo16_pin_S32(lcec_slave_t *slave, uint16_t index, uint8_t subinde
 int lcec_read_sdo32_pin_U32(lcec_slave_t *slave, uint16_t index, uint8_t subindex, volatile uint32_t *result) {
   uint8_t data[4];
   int err = lcec_read_sdo(slave, index, subindex, data, 4);
+  if (err) return err;
   *result = EC_READ_U32(data);
 
   return err;
@@ -340,6 +348,7 @@ int lcec_read_sdo32_pin_U32(lcec_slave_t *slave, uint16_t index, uint8_t subinde
 int lcec_read_sdo32_pin_S32(lcec_slave_t *slave, uint16_t index, uint8_t subindex, volatile int32_t *result) {
   uint8_t data[4];
   int err = lcec_read_sdo(slave, index, subindex, data, 4);
+  if (err) return err;
   *result = EC_READ_S32(data);
 
   return err;
