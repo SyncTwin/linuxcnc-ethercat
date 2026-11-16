@@ -81,6 +81,8 @@
 #include "../lcec.h"
 #include "lcec_generic.h"
 
+#define NX_STATION_QUALITY_ABI "nx_station_quality_v1"  ///< Always-present station quality pins.
+
 #define NX_RXPDO_ASSIGN 0x1c12  ///< Output (master -> slave) PDO assignment.
 #define NX_TXPDO_ASSIGN 0x1c13  ///< Input (slave -> master) PDO assignment.
 
@@ -115,6 +117,8 @@ typedef struct {
 typedef struct {
   lcec_generic_pin_t *pins;                    ///< Declared unit entries (from the config).
   int n_pins;
+  hal_bit_t *valid;
+  hal_bit_t *fault;
   int io_active_mapped;                        ///< 0x3006:04 is in the input map.
   unsigned int io_active_os;                   ///< Byte offset of 0x3006:04.
   unsigned int io_active_bp;                   ///< Bit position of 0x3006:04.
@@ -123,7 +127,7 @@ typedef struct {
 } lcec_omron_nx_data_t;
 
 static int lcec_omron_nx_init(int comp_id, lcec_slave_t *slave);
-static void lcec_omron_nx_read(lcec_slave_t *slave, long period);
+static void lcec_omron_nx_read(lcec_slave_t *slave, uint8_t *pd, int exchanged, int exchange_valid);
 static void lcec_omron_nx_write(lcec_slave_t *slave, long period);
 
 static lcec_typelist_t types[] = {
@@ -271,7 +275,7 @@ static int lcec_omron_nx_verify(lcec_slave_t *slave, const ec_sync_info_t *sm, c
     if (k == map->n_pdos) {
       rtapi_print_msg(RTAPI_MSG_ERR, LCEC_MSG_PFX "slave %s.%s: slot %d: declared PDO 0x%04x is not assigned by the coupler -- the unit in the slot is not the one in the config\n",
           master->name, slave->name, lcec_omron_nx_slot(pdo->index), pdo->index);
-      return -EINVAL;
+      return -ESTALE;
     }
     if ((int)pdo->n_entries != map->count[k]) goto differs;
     for (j = 0; j < map->count[k]; j++) {
@@ -287,7 +291,7 @@ static int lcec_omron_nx_verify(lcec_slave_t *slave, const ec_sync_info_t *sm, c
   differs:
     rtapi_print_msg(RTAPI_MSG_ERR, LCEC_MSG_PFX "slave %s.%s: slot %d: PDO 0x%04x maps other entries on the coupler than in the config -- the unit in the slot is not the one in the config\n",
         master->name, slave->name, lcec_omron_nx_slot(pdo->index), pdo->index);
-    return -EINVAL;
+    return -ESTALE;
   }
 
   for (k = 0; k < map->n_pdos; k++) {
@@ -296,7 +300,7 @@ static int lcec_omron_nx_verify(lcec_slave_t *slave, const ec_sync_info_t *sm, c
     if (sm == NULL || i == (int)sm->n_pdos) {
       rtapi_print_msg(RTAPI_MSG_ERR, LCEC_MSG_PFX "slave %s.%s: slot %d: the coupler assigns PDO 0x%04x, the config declares no unit there\n",
           master->name, slave->name, lcec_omron_nx_slot(map->pdos[k]), map->pdos[k]);
-      return -EINVAL;
+      return -ESTALE;
     }
   }
   return declared;
@@ -331,17 +335,53 @@ static int lcec_omron_nx_init_io_active(lcec_slave_t *slave, lcec_omron_nx_data_
   if (lcec_pdo_init(slave, NX_IO_ACTIVE_IDX, NX_IO_ACTIVE_SIDX, &hal_data->io_active_os, &hal_data->io_active_bp) != 0) return -EIO;
   hal_data->io_active_mapped = 1;
 
-  if (lcec_pin_newf(HAL_BIT, HAL_OUT, (void **)&hal_data->io_active[0], "%s.%s.%s.coupler-io-active", LCEC_MODULE_NAME, master->name,
-          slave->name) != 0)
-    return -EIO;
-
-  for (int s = 1; s <= NX_MAX_SLOTS && s < hal_data->io_active_bits; s++) {
-    if (!has_slot[s]) continue;
-    if (lcec_pin_newf(HAL_BIT, HAL_OUT, (void **)&hal_data->io_active[s], "%s.%s.%s.slot%d.io-active", LCEC_MODULE_NAME, master->name,
-            slave->name, s) != 0)
-      return -EIO;
-  }
   return 0;
+}
+
+/// @brief ABI is constant for healthy, absent and quarantined stations.
+static int lcec_omron_nx_quality_pins(lcec_slave_t *slave, lcec_omron_nx_data_t *hal_data) {
+  const char *master = slave->master->name;
+  int err;
+  err = lcec_pin_newf(HAL_BIT, HAL_OUT, (void **)&hal_data->valid,
+      "%s.%s.%s.coupler-valid", LCEC_MODULE_NAME, master, slave->name);
+  if (err) return err;
+  err = lcec_pin_newf(HAL_BIT, HAL_OUT, (void **)&hal_data->fault,
+      "%s.%s.%s.coupler-fault", LCEC_MODULE_NAME, master, slave->name);
+  if (err) return err;
+  err = lcec_pin_newf(HAL_BIT, HAL_OUT, (void **)&hal_data->io_active[0],
+      "%s.%s.%s.coupler-io-active", LCEC_MODULE_NAME, master, slave->name);
+  if (err) return err;
+  for (int s = 1; s <= NX_MAX_SLOTS; s++) {
+    int used = 0;
+    for (const ec_sync_info_t *sm = slave->generic_sync_managers; sm && sm->index != 0xff; sm++) {
+      for (unsigned int p = 0; p < sm->n_pdos; p++) {
+        if (!lcec_omron_nx_unit_base(sm->pdos[p].index)) return -EINVAL;
+        if (lcec_omron_nx_slot(sm->pdos[p].index) == s) used = 1;
+      }
+    }
+    if (!used) continue;
+    err = lcec_pin_newf(HAL_BIT, HAL_OUT, (void **)&hal_data->io_active[s],
+        "%s.%s.%s.slot%d.io-active", LCEC_MODULE_NAME, master, slave->name, s);
+    if (err) return err;
+  }
+  LCEC_PIN_BIT_SET(hal_data->valid, 0);
+  LCEC_PIN_BIT_SET(hal_data->fault, 1);
+  rtapi_print_msg(RTAPI_MSG_INFO, LCEC_MSG_PFX "slave %s.%s: " NX_STATION_QUALITY_ABI "\n", master, slave->name);
+  return 0;
+}
+
+/// @brief Device quarantine is a distinct outcome, never a blanket errno-to-success.
+/// Beckhoff EtherCAT System SyncUnits setup (2474149131): isolate invalid cyclic
+/// data by domain. No Hot Connect/safety certification is implied for NX units.
+static int lcec_omron_nx_quarantine(lcec_slave_t *slave, const char *reason) {
+  lcec_omron_nx_data_t *hal_data = slave->hal_data;
+  slave->quarantined = 1;
+  slave->sync_info = NULL;
+  LCEC_PIN_BIT_SET(hal_data->valid, 0);
+  LCEC_PIN_BIT_SET(hal_data->fault, 1);
+  rtapi_print_msg(RTAPI_MSG_ERR, LCEC_MSG_PFX "slave %s.%s: station quarantined: %s; no PDO in this session, reload required\n",
+      slave->master->name, slave->name, reason);
+  return lcec_generic_export_pins(slave, hal_data->pins, hal_data->n_pins);
 }
 
 /// @brief Append one read direction to the master's sync config.
@@ -366,22 +406,17 @@ static int lcec_omron_nx_init(int comp_id, lcec_slave_t *slave) {
   int n_out, n_in, err;
   ec_slave_info_t info;
 
+  hal_data = LCEC_HAL_ALLOCATE(lcec_omron_nx_data_t);
+  if (hal_data == NULL) return -ENOMEM;
+  memset(hal_data, 0, sizeof(*hal_data));
+  hal_data->pins = (lcec_generic_pin_t *)slave->hal_data;
+  hal_data->n_pins = slave->generic_pdo_entry_count;
+  slave->hal_data = hal_data;
+  err = lcec_omron_nx_quality_pins(slave, hal_data);
+  if (err) return err;
+
   if (ecrt_master_get_slave(master->master, slave->index, &info) != 0) {
-    // Optional slave (ETG.1020 hot connect): the station is not on the bus at
-    // load. The master and the other slaves run without it; its pins exist so
-    // the nets of the config hold, read zero, and nothing reaches the process
-    // image. There is no map to verify, so a station that shows up later gets
-    // no process data until the HAL session restarts with it present.
-    rtapi_print_msg(RTAPI_MSG_WARN, LCEC_MSG_PFX "slave %s.%s: NX station not on the bus, no process data in this session\n",
-        master->name, slave->name);
-    hal_data = LCEC_HAL_ALLOCATE(lcec_omron_nx_data_t);
-    if (hal_data == NULL) return -ENOMEM;
-    memset(hal_data, 0, sizeof(*hal_data));
-    hal_data->pins = (lcec_generic_pin_t *)slave->hal_data;
-    hal_data->n_pins = slave->generic_pdo_entry_count;
-    slave->hal_data = hal_data;
-    slave->sync_info = NULL;  // the declared map lacks the coupler's own PDOs: configure nothing
-    return lcec_generic_export_pins(slave, hal_data->pins, hal_data->n_pins);
+    return lcec_omron_nx_quarantine(slave, "station not on the bus at load");
   }
 
   if (lcec_omron_nx_scan(slave, NX_RXPDO_ASSIGN, &out) < 0 || lcec_omron_nx_scan(slave, NX_TXPDO_ASSIGN, &in) < 0) {
@@ -392,8 +427,10 @@ static int lcec_omron_nx_init(int comp_id, lcec_slave_t *slave) {
   }
 
   n_out = lcec_omron_nx_verify(slave, lcec_omron_nx_declared(slave, EC_DIR_OUTPUT), &out, has_slot);
+  if (n_out == -ESTALE) return lcec_omron_nx_quarantine(slave, "output module PDO assignment/map differs from config");
   if (n_out < 0) return n_out;
   n_in = lcec_omron_nx_verify(slave, lcec_omron_nx_declared(slave, EC_DIR_INPUT), &in, has_slot);
+  if (n_in == -ESTALE) return lcec_omron_nx_quarantine(slave, "input module PDO assignment/map differs from config");
   if (n_in < 0) return n_in;
   rtapi_print_msg(RTAPI_MSG_INFO, LCEC_MSG_PFX "slave %s.%s: NX station matches the config: %d output and %d input unit PDOs\n",
       master->name, slave->name, n_out, n_in);
@@ -408,38 +445,45 @@ static int lcec_omron_nx_init(int comp_id, lcec_slave_t *slave) {
   lcec_omron_nx_add_sync(syncs, EC_DIR_INPUT, EC_WD_DISABLE, &in);   // SM3, inputs
   slave->sync_info = syncs->syncs;
 
-  hal_data = LCEC_HAL_ALLOCATE(lcec_omron_nx_data_t);
-  if (hal_data == NULL) return -ENOMEM;
-  memset(hal_data, 0, sizeof(*hal_data));
-  hal_data->pins = (lcec_generic_pin_t *)slave->hal_data;  // the config's pins, allocated by lcec_main
-  hal_data->n_pins = slave->generic_pdo_entry_count;
-  slave->hal_data = hal_data;
-
   err = lcec_generic_init_pins(slave, hal_data->pins, hal_data->n_pins);
   if (err != 0) return err;
   err = lcec_omron_nx_init_io_active(slave, hal_data, &in, has_slot);
   if (err != 0) return err;
 
-  slave->proc_read = lcec_omron_nx_read;
+  slave->proc_bus_read = lcec_omron_nx_read;
   slave->proc_write = lcec_omron_nx_write;
   return 0;
 }
 
-static void lcec_omron_nx_read(lcec_slave_t *slave, long period) {
+static void lcec_omron_nx_read(lcec_slave_t *slave, uint8_t *pd, int exchanged, int exchange_valid) {
   lcec_omron_nx_data_t *hal_data = (lcec_omron_nx_data_t *)slave->hal_data;
-  uint8_t *pd = lcec_slave_pd(slave);
-
-  if (!slave->state.operational) return;
-  lcec_generic_read_pins(slave, hal_data->pins, hal_data->n_pins);
+  // The bus owns both this image and every station input/quality pin.
+  // W519-E1-15 section 9-2: io-active must be true before using inputs.
+  int valid = exchange_valid && hal_data->io_active_mapped;
+  if (!valid) {
+    LCEC_PIN_BIT_SET(hal_data->valid, 0);
+    LCEC_PIN_BIT_SET(hal_data->fault, 1);
+    for (int s = 0; s <= NX_MAX_SLOTS; s++) {
+      if (hal_data->io_active[s]) LCEC_PIN_BIT_SET(hal_data->io_active[s], 0);
+    }
+    return;
+  }
+  // Planned divider gaps retain the preceding sample, never manufacture a new one.
+  if (!exchanged) return;
+  lcec_generic_read_pins_pd(pd, hal_data->pins, hal_data->n_pins);
 
   if (hal_data->io_active_mapped) {
     for (int s = 0; s <= NX_MAX_SLOTS; s++) {
       unsigned int bit = hal_data->io_active_bp + s;
 
       if (hal_data->io_active[s] == NULL) continue;
-      LCEC_PIN_BIT_SET(hal_data->io_active[s], EC_READ_BIT(&pd[hal_data->io_active_os + (bit >> 3)], bit & 7));
+      int active = s < hal_data->io_active_bits && EC_READ_BIT(&pd[hal_data->io_active_os + (bit >> 3)], bit & 7);
+      LCEC_PIN_BIT_SET(hal_data->io_active[s], active);
+      valid = valid && active;
     }
   }
+  LCEC_PIN_BIT_SET(hal_data->valid, valid);
+  LCEC_PIN_BIT_SET(hal_data->fault, !valid);
 }
 
 static void lcec_omron_nx_write(lcec_slave_t *slave, long period) {

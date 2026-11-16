@@ -139,6 +139,8 @@ typedef int (*lcec_slave_preinit_t)(lcec_slave_t *slave);
 typedef int (*lcec_slave_init_t)(int comp_id, lcec_slave_t *slave);
 typedef void (*lcec_slave_cleanup_t)(lcec_slave_t *slave);
 typedef void (*lcec_slave_rw_t)(lcec_slave_t *slave, long period);
+/// Bus-only input callback: one domain image and its quality, every bus tick.
+typedef void (*lcec_slave_bus_read_t)(lcec_slave_t *slave, uint8_t *pd, int exchanged, int valid);
 
 typedef enum {
   MODPARAM_TYPE_BIT,    ///< Modparam value is a single bit.
@@ -327,6 +329,8 @@ typedef struct lcec_sync_unit {
   int process_data_len;
   uint8_t *pd;  ///< The image the unit's drivers work on; see lcec_slave_pd().
   int queued;
+  ec_domain_state_t state;  ///< Bus-thread only, never read by unit callbacks.
+  int exchange_stalled;  ///< Bus stopped sending after the existing stall cutoff.
   int process;
   int write;
   lcec_sync_unit_data_t *hal_data;  ///< Unit pins, NULL for a master with a single unit.
@@ -460,6 +464,7 @@ typedef struct lcec_slave {
   lcec_slave_t *next;                         ///< Previous slave
   lcec_master_t *master;                      ///< Master for this slave
   lcec_sync_unit_t *sync_unit;                ///< Process-data Sync Unit containing this slave.
+  int quarantined;                           ///< No PDO registration/callbacks until session reload.
   int index;                                  ///< Index of this slave.
   char name[LCEC_CONF_STR_MAXLEN];            ///< Slave name.
   char sync_unit_name[LCEC_CONF_STR_MAXLEN];  ///< Configured Sync Unit name.
@@ -474,6 +479,7 @@ typedef struct lcec_slave {
   lcec_slave_preinit_t proc_preinit;          ///< Callback for pre-init, if any.
   lcec_slave_init_t proc_init;                ///< Callback for initializing device.
   lcec_slave_cleanup_t proc_cleanup;          ///< Calback for cleaning up the device.
+  lcec_slave_bus_read_t proc_bus_read;        ///< Optional bus-only input/quality writer.
   lcec_slave_rw_t proc_read;                  ///< Callback for reading from the device.
   lcec_slave_rw_t proc_write;                 ///< Callback for writing to the device.
   lcec_slave_state_t *hal_state_data;         ///< HAL state data.

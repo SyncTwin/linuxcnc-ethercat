@@ -1578,6 +1578,7 @@ void lcec_read_master(void *arg, long period) {
     // pins continue to describe the complete process image. Domains that are
     // not scheduled this cycle retain their last reported state.
     ecrt_domain_state(sync_unit->domain, &sync_unit_state);
+    sync_unit->state = sync_unit_state;
     if (sync_unit->hal_data != NULL && sync_unit->process) {
       lcec_update_sync_unit_wkc(sync_unit->hal_data, &sync_unit_state);
     }
@@ -1672,9 +1673,17 @@ void lcec_read_master(void *arg, long period) {
     rtapi_mutex_give(&master->mutex);
     if (check_states) {
       lcec_update_slave_state_hal(slave->hal_state_data, &slave->state);
-      if (slave->state.online && !slave->state.operational) {
+      if (!slave->quarantined && slave->state.online && !slave->state.operational) {
         not_op++;
       }
+    }
+
+    // Bus-owned inputs/quality must run even when a unit thread stalls or
+    // rejects a torn RX copy. PDO bytes and WC come from the same bus image.
+    if (slave->proc_bus_read != NULL) {
+      lcec_sync_unit_t *unit = slave->sync_unit;
+      slave->proc_bus_read(slave, unit->process_data, unit->process,
+          slave->state.operational && unit->state.wc_state == EC_WC_COMPLETE && !unit->exchange_stalled);
     }
 
     // process read function; drivers of a threaded unit run in its thread
@@ -1824,6 +1833,7 @@ void lcec_write_master(void *arg, long period) {
       if (lcec_su_tx_take(&sync_unit->xfer, sync_unit->staged, &sync_unit->tx_gen_sent) > 0) {
         memcpy(sync_unit->process_data, sync_unit->staged, sync_unit->process_data_len);
         sync_unit->late_run = 0;
+        sync_unit->exchange_stalled = 0;
       } else if (!force_cycle) {
         // the unit thread missed its window: resend the previous outputs, but
         // stop sending once it looks stalled, so the slaves' SM watchdogs
@@ -1841,6 +1851,7 @@ void lcec_write_master(void *arg, long period) {
                 master->name, sync_unit->name, LCEC_SU_STALL_SENDS);
           }
           sync_unit->write = 0;
+          sync_unit->exchange_stalled = 1;
         }
       }
     }

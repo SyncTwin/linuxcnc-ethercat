@@ -56,7 +56,8 @@ int lcec_generic_init(int comp_id, lcec_slave_t *slave) {
 /// in here.
 int lcec_generic_init_pins(lcec_slave_t *slave, lcec_generic_pin_t *hal_data, int count) {
   for (int i = 0; i < count; i++) {
-    lcec_pdo_init(slave, hal_data[i].pdo_idx, hal_data[i].pdo_sidx, &hal_data[i].pdo_os, &hal_data[i].pdo_bp);
+    int err = lcec_pdo_init(slave, hal_data[i].pdo_idx, hal_data[i].pdo_sidx, &hal_data[i].pdo_os, &hal_data[i].pdo_bp);
+    if (err) return err;
   }
   return lcec_generic_export_pins(slave, hal_data, count);
 }
@@ -141,7 +142,11 @@ void lcec_generic_read(lcec_slave_t *slave, long period) {
 
 /// @brief Read the input pins of `pins` from the process image.
 void lcec_generic_read_pins(lcec_slave_t *slave, lcec_generic_pin_t *hal_data, int count) {
-  uint8_t *pd = lcec_slave_pd(slave);
+  lcec_generic_read_pins_pd(lcec_slave_pd(slave), hal_data, count);
+}
+
+/// @brief Same input decoder with an explicit, bus-owned process image.
+void lcec_generic_read_pins_pd(uint8_t *pd, lcec_generic_pin_t *hal_data, int count) {
   int i, j, offset;
   hal_float_t fval;
 
