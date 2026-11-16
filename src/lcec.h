@@ -329,6 +329,7 @@ typedef struct lcec_sync_unit {
   int process_data_len;
   uint8_t *pd;  ///< The image the unit's drivers work on; see lcec_slave_pd().
   int queued;
+  int started;  ///< Sticky: own non-quarantined slaves OP and domain complete once.
   ec_domain_state_t state;  ///< Bus-thread only, never read by unit callbacks.
   int exchange_stalled;  ///< Bus stopped sending after the existing stall cutoff.
   int process;
@@ -367,7 +368,6 @@ typedef struct lcec_master {
   int process_data_len;
   lcec_sync_unit_t *first_sync_unit;
   lcec_sync_unit_t *last_sync_unit;
-  int sync_units_started;
   int sync_unit_count;
   int64_t next_tick;  ///< Grid index of the tick the next write sends; tick 0 is the activation app time.
   lcec_su_tick_t tick;  ///< Latest bus tick, for Sync Unit threads phase-locking to it.

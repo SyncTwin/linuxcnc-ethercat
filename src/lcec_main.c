@@ -167,7 +167,7 @@ void lcec_write_master(void *arg, long period);
 static int lcec_activate_master(lcec_master_t *master);
 static void lcec_activate(void *arg, long period);
 static lcec_sync_unit_t *lcec_master_get_sync_unit(lcec_master_t *master, const char *name, uint32_t cycle_time, uint32_t phase);
-static int lcec_master_all_op(lcec_master_t *master);
+static int lcec_master_units_started(lcec_master_t *master);
 static int lcec_init_sync_unit(lcec_master_t *master, lcec_sync_unit_t *sync_unit);
 static void lcec_read_sync_unit(void *arg, long period);
 static void lcec_write_sync_unit(void *arg, long period);
@@ -232,7 +232,14 @@ static lcec_sync_unit_t *lcec_master_get_sync_unit(lcec_master_t *master, const 
   return sync_unit;
 }
 
-static int lcec_master_all_op(lcec_master_t *master) { return master->ms.al_states == EC_AL_STATE_OP; }
+// Startup is local to each domain (Beckhoff EtherCAT System SyncUnits setup,
+// 2474149131). The master all-op pins remain unmodified diagnostics.
+static int lcec_master_units_started(lcec_master_t *master) {
+  for (lcec_sync_unit_t *unit = master->first_sync_unit; unit; unit = unit->next) {
+    if (!__atomic_load_n(&unit->started, __ATOMIC_ACQUIRE)) return 0;
+  }
+  return 1;
+}
 
 /// @brief Main entrypoint from LinuxCNC
 int rtapi_app_main(void) {
@@ -1541,7 +1548,7 @@ void lcec_read_master(void *arg, long period) {
 #endif
 
   // get state check flag
-  if (!master->sync_units_started) {
+  if (!lcec_master_units_started(master)) {
     check_states = 1;
     master->state_update_timer = 0;
   } else if (master->state_update_timer > 0) {
@@ -1595,9 +1602,6 @@ void lcec_read_master(void *arg, long period) {
   dc_sync_diff = LCEC_PARAM_BIT_GET(master->hal_data->dc_sync_monitor) ? ecrt_master_sync_monitor_process(master->master) : 0xffffffffu;
   if (check_states) {
     ecrt_master_state(master->master, &master->ms);
-  }
-  if (!master->sync_units_started && lcec_master_all_op(master)) {
-    master->sync_units_started = 1;
   }
   rtapi_mutex_give(&master->mutex);
 
@@ -1691,6 +1695,20 @@ void lcec_read_master(void *arg, long period) {
       master->process_data = slave->sync_unit->process_data;
       master->process_data_len = slave->sync_unit->process_data_len;
       slave->proc_read(slave, slave->sync_unit->cycle_time);
+    }
+  }
+
+  // Arm each unit once from its own OP participants and first complete
+  // exchange. Sticky: loss of OP must never disable the thread-stall cutoff.
+  for (sync_unit = master->first_sync_unit; sync_unit; sync_unit = sync_unit->next) {
+    int all_op = 1;
+    if (__atomic_load_n(&sync_unit->started, __ATOMIC_ACQUIRE)) continue;
+    for (slave = master->first_slave; slave; slave = slave->next) {
+      if (slave->sync_unit == sync_unit && !slave->quarantined && !slave->state.operational) all_op = 0;
+    }
+    if (sync_unit->pdo_entry_count == 0 ||
+        (all_op && sync_unit->process && sync_unit->state.wc_state == EC_WC_COMPLETE)) {
+      __atomic_store_n(&sync_unit->started, 1, __ATOMIC_RELEASE);
     }
   }
 
@@ -1811,8 +1829,8 @@ void lcec_write_master(void *arg, long period) {
   // each Sync Unit on the ticks of the DC grid its divider and phase select,
   // so a unit's exchange keeps the same position relative to the SYNC0
   // events of its slaves across restarts.
-  force_cycle = !master->sync_units_started;
   for (sync_unit = master->first_sync_unit; sync_unit != NULL; sync_unit = sync_unit->next) {
+    force_cycle = !__atomic_load_n(&sync_unit->started, __ATOMIC_ACQUIRE);
     sync_unit->write = force_cycle || lcec_su_due(master->next_tick, sync_unit->cycle_divider, sync_unit->phase);
   }
 
@@ -1834,7 +1852,7 @@ void lcec_write_master(void *arg, long period) {
         memcpy(sync_unit->process_data, sync_unit->staged, sync_unit->process_data_len);
         sync_unit->late_run = 0;
         sync_unit->exchange_stalled = 0;
-      } else if (!force_cycle) {
+      } else if (__atomic_load_n(&sync_unit->started, __ATOMIC_ACQUIRE)) {
         // the unit thread missed its window: resend the previous outputs, but
         // stop sending once it looks stalled, so the slaves' SM watchdogs
         // take their outputs to a safe state as they would for a dead master
@@ -2484,7 +2502,7 @@ static void lcec_read_sync_unit(void *arg, long period) {
     LCEC_PIN_BIT_SET(hd->fresh, 1);
   } else {
     LCEC_PIN_BIT_SET(hd->fresh, 0);
-    if (master->sync_units_started) {
+    if (__atomic_load_n(&sync_unit->started, __ATOMIC_ACQUIRE)) {
       LCEC_PIN_U32_SET(hd->stale_cnt, LCEC_PIN_U32_GET(hd->stale_cnt) + 1);
     }
   }
@@ -2506,7 +2524,7 @@ static void lcec_read_sync_unit(void *arg, long period) {
   // another domain's image here, not this unit's.  Once the unit has run for
   // a second with its slaves operational, name any driver that never asked
   // for its image.
-  if (sync_unit->pd_check > 0 && master->sync_units_started && --sync_unit->pd_check == 0) {
+  if (sync_unit->pd_check > 0 && __atomic_load_n(&sync_unit->started, __ATOMIC_ACQUIRE) && --sync_unit->pd_check == 0) {
     lcec_sync_unit_check_pd(sync_unit);
   }
 }
