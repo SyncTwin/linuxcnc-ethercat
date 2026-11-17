@@ -1680,6 +1680,15 @@ void lcec_read_master(void *arg, long period) {
       if (!slave->quarantined && slave->state.online && !slave->state.operational) {
         not_op++;
       }
+      // Its slave config was made with no PDOs, so the master would hand the
+      // station an empty map (NX coupler: AL 0x001E). Say so once; only a
+      // HAL restart with the station present gives it process data.
+      if (slave->quarantined && slave->quarantine_reason == LCEC_QUARANTINE_ABSENT_AT_LOAD && slave->state.online &&
+          !slave->quarantine_reported) {
+        slave->quarantine_reported = 1;
+        rtapi_print_msg(RTAPI_MSG_ERR, LCEC_MSG_PFX "station %s (%s/%d) " LCEC_MSG_STATION_APPEARED "\n", slave->name, master->name,
+            slave->index);
+      }
     }
 
     // Bus-owned inputs/quality must run even when a unit thread stalls or
