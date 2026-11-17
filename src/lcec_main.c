@@ -1461,15 +1461,22 @@ static int lcec_activate_master(lcec_master_t *master) {
 /// by the reset (requested state stays OP). A slave absent from the bus
 /// (optional slave, no ec_slave attached) is not online and never counts.
 ///
-/// Per master: XML `<master autoRestoreOp="false">` turns it off (default on).
+/// Per master: XML `<master autoRestoreOp="false">` turns it off (default on)
+/// for a slave that has LEFT OP — on a live bus that is an event for the
+/// engineer, not for a silent reset. A slave that has not reached OP once since
+/// activation (`not_op_startup`) is still brought up: its start-up configuration
+/// failed and nothing but a reset retries it. Seen 17.11 on IS620N: after a
+/// DC "PLL error" (AL 0x0032) the drive answered a PDO-mapping SDO later than
+/// IgH's fixed 1000 ms (master/fsm_coe.c EC_SDO_RESPONSE_TIMEOUT, not settable
+/// for config SDOs), refused SAFEOP with AL 0x001D and stayed in PREOP.
 /// One WARN when an event starts (first reset), one when it ends (all online
 /// slaves in OP again, or link down); the resets in between are silent.
-static void lcec_auto_restore_op(lcec_master_t *master, int not_op) {
+static void lcec_auto_restore_op(lcec_master_t *master, int not_op, int not_op_startup) {
   long long now;
   int ret;
 
   if (!master->auto_restore_op) {
-    return;
+    not_op = not_op_startup;
   }
   now = rtapi_get_time();
   if (not_op == 0 || !master->ms.link_up) {
@@ -1510,6 +1517,7 @@ void lcec_read_master(void *arg, long period) {
   lcec_sync_unit_t *sync_unit;
   int check_states;
   int not_op = 0;
+  int not_op_startup = 0;
 
   // Master not yet activated: process_data is NULL until lcec_activate_master()
   // runs. On new (initf-capable) linuxcnc loaded with a legacy .hal that omits
@@ -1677,8 +1685,14 @@ void lcec_read_master(void *arg, long period) {
     rtapi_mutex_give(&master->mutex);
     if (check_states) {
       lcec_update_slave_state_hal(slave->hal_state_data, &slave->state);
+      if (slave->state.operational) {
+        slave->been_op = 1;
+      }
       if (!slave->quarantined && slave->state.online && !slave->state.operational) {
         not_op++;
+        if (!slave->been_op) {
+          not_op_startup++;
+        }
       }
       // A station whose PDO map is read at load (driver opt-in) cannot take
       // a power cycle or a late appearance in a live session: the master
@@ -1726,7 +1740,7 @@ void lcec_read_master(void *arg, long period) {
   }
 
   if (check_states) {
-    lcec_auto_restore_op(master, not_op);
+    lcec_auto_restore_op(master, not_op, not_op_startup);
   }
 
   for (sync_unit = master->first_sync_unit; sync_unit != NULL; sync_unit = sync_unit->next) {

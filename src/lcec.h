@@ -481,6 +481,7 @@ typedef struct lcec_slave {
   int reload_on_relink;                      ///< Driver opt-in: a station that (re)joins the live bus needs a HAL restart.
   int relink_armed;                          ///< Next offline->online transition is logged (once per absence).
   int relink_was_online;                     ///< Online state seen at the previous state check.
+  int been_op;                               ///< Reached OP since activation (startup restore of autoRestoreOp="false" ends).
   int index;                                  ///< Index of this slave.
   char name[LCEC_CONF_STR_MAXLEN];            ///< Slave name.
   char sync_unit_name[LCEC_CONF_STR_MAXLEN];  ///< Configured Sync Unit name.

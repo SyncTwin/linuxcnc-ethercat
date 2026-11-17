@@ -84,7 +84,10 @@ and some of which are required:
   refused OP and the IgH master set its error flag), lcec calls
   `ecrt_master_reset()` once per second until it is back in OP. One
   WARN line when that starts, one when OP is back. `false` leaves a
-  slave that dropped out of OP alone until a rescan or HAL restart.
+  slave that dropped out of OP alone until a rescan or HAL restart; a
+  slave that has not reached OP once since activation (its start-up
+  configuration failed, e.g. a PDO-mapping SDO timed out) is still
+  restored, on both settings.
 - `pllOwner="true|false"`: (optional) which master's PLL steers the
   period of the HAL thread its write funct runs in. The RTAPI period
   correction is one value per thread, so when several masters write in
