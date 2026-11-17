@@ -1680,14 +1680,18 @@ void lcec_read_master(void *arg, long period) {
       if (!slave->quarantined && slave->state.online && !slave->state.operational) {
         not_op++;
       }
-      // Its slave config was made with no PDOs, so the master would hand the
-      // station an empty map (NX coupler: AL 0x001E). Say so once; only a
-      // HAL restart with the station present gives it process data.
-      if (slave->quarantined && slave->quarantine_reason == LCEC_QUARANTINE_ABSENT_AT_LOAD && slave->state.online &&
-          !slave->quarantine_reported) {
-        slave->quarantine_reported = 1;
-        rtapi_print_msg(RTAPI_MSG_ERR, LCEC_MSG_PFX "station %s (%s/%d) " LCEC_MSG_STATION_APPEARED "\n", slave->name, master->name,
-            slave->index);
+      // A station whose PDO map is read at load (driver opt-in) cannot take
+      // a power cycle or a late appearance in a live session: the master
+      // configures it with the load-time map, or none (NX coupler: AL 0x001E).
+      // Say so once per absence; only a HAL restart re-reads the map.
+      if (slave->reload_on_relink) {
+        if (!slave->state.online && slave->relink_was_online) slave->relink_armed = 1;
+        if (slave->state.online && slave->relink_armed) {
+          slave->relink_armed = 0;
+          rtapi_print_msg(RTAPI_MSG_ERR, LCEC_MSG_PFX "station %s (%s/%d) " LCEC_MSG_STATION_APPEARED "\n", slave->name, master->name,
+              slave->index);
+        }
+        slave->relink_was_online = slave->state.online;
       }
     }
 

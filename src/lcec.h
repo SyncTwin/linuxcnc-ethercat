@@ -478,7 +478,9 @@ typedef struct lcec_slave {
   lcec_sync_unit_t *sync_unit;                ///< Process-data Sync Unit containing this slave.
   int quarantined;                           ///< No PDO registration/callbacks until session reload.
   int quarantine_reason;                     ///< lcec_quarantine_reason_t, why the slave is quarantined.
-  int quarantine_reported;                   ///< The live-session appearance was logged once.
+  int reload_on_relink;                      ///< Driver opt-in: a station that (re)joins the live bus needs a HAL restart.
+  int relink_armed;                          ///< Next offline->online transition is logged (once per absence).
+  int relink_was_online;                     ///< Online state seen at the previous state check.
   int index;                                  ///< Index of this slave.
   char name[LCEC_CONF_STR_MAXLEN];            ///< Slave name.
   char sync_unit_name[LCEC_CONF_STR_MAXLEN];  ///< Configured Sync Unit name.

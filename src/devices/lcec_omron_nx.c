@@ -382,6 +382,7 @@ static int lcec_omron_nx_quarantine(lcec_slave_t *slave, lcec_quarantine_reason_
   lcec_omron_nx_data_t *hal_data = slave->hal_data;
   slave->quarantined = 1;
   slave->quarantine_reason = why;
+  if (why == LCEC_QUARANTINE_ABSENT_AT_LOAD) slave->relink_armed = 1;  // its first appearance is a relink
   slave->sync_info = NULL;
   LCEC_PIN_BIT_SET(hal_data->valid, 0);
   LCEC_PIN_BIT_SET(hal_data->fault, 1);
@@ -418,6 +419,10 @@ static int lcec_omron_nx_init(int comp_id, lcec_slave_t *slave) {
   hal_data->pins = (lcec_generic_pin_t *)slave->hal_data;
   hal_data->n_pins = slave->generic_pdo_entry_count;
   slave->hal_data = hal_data;
+  // The map is read once at load: a station that power-cycles comes back
+  // with no units configured and the master would hand it the old map
+  // (AL 0x001E or an empty stack). Only a HAL restart re-reads it.
+  slave->reload_on_relink = 1;
   err = lcec_omron_nx_quality_pins(slave, hal_data);
   if (err) return err;
 
