@@ -378,9 +378,10 @@ static int lcec_omron_nx_quality_pins(lcec_slave_t *slave, lcec_omron_nx_data_t 
 /// @brief Device quarantine is a distinct outcome, never a blanket errno-to-success.
 /// Beckhoff EtherCAT System SyncUnits setup (2474149131): isolate invalid cyclic
 /// data by domain. No Hot Connect/safety certification is implied for NX units.
-static int lcec_omron_nx_quarantine(lcec_slave_t *slave, const char *reason) {
+static int lcec_omron_nx_quarantine(lcec_slave_t *slave, lcec_quarantine_reason_t why, const char *reason) {
   lcec_omron_nx_data_t *hal_data = slave->hal_data;
   slave->quarantined = 1;
+  slave->quarantine_reason = why;
   slave->sync_info = NULL;
   LCEC_PIN_BIT_SET(hal_data->valid, 0);
   LCEC_PIN_BIT_SET(hal_data->fault, 1);
@@ -421,24 +422,26 @@ static int lcec_omron_nx_init(int comp_id, lcec_slave_t *slave) {
   if (err) return err;
 
   if (ecrt_master_get_slave(master->master, slave->index, &info) != 0) {
-    return lcec_omron_nx_quarantine(slave, "station not on the bus at load");
+    return lcec_omron_nx_quarantine(slave, LCEC_QUARANTINE_ABSENT_AT_LOAD, "station not on the bus at load");
   }
 
-  // IgH 1.6.10 c4b4ac4 lib/master.c ecrt_master_sdo_upload preserves errno.
-  // Only an unreadable device map is quarantined; resource/config errors
-  // must still fail init. The SDO reader logs the object, errno and abort.
+  // Any SDO failure while reading the map (abort, timeout, wrong size: the
+  // errno is whatever IgH or lcec_read_sdo returns) quarantines the station.
+  // The only non-SDO error of the scan is -E2BIG (map exceeds the driver's
+  // tables), a capacity limit of this driver that must still fail init.
+  // The SDO reader logs the object, errno and abort code.
   err = lcec_omron_nx_scan(slave, NX_RXPDO_ASSIGN, &out);
-  if (err == -EIO) return lcec_omron_nx_quarantine(slave, "station PDO map unreadable over CoE (output assignment/map, EIO)");
-  if (err < 0) return err;
+  if (err == -E2BIG) return err;
+  if (err < 0) return lcec_omron_nx_quarantine(slave, LCEC_QUARANTINE_MAP_UNREADABLE, "station PDO map unreadable over CoE (output assignment/map)");
   err = lcec_omron_nx_scan(slave, NX_TXPDO_ASSIGN, &in);
-  if (err == -EIO) return lcec_omron_nx_quarantine(slave, "station PDO map unreadable over CoE (input assignment/map, EIO)");
-  if (err < 0) return err;
+  if (err == -E2BIG) return err;
+  if (err < 0) return lcec_omron_nx_quarantine(slave, LCEC_QUARANTINE_MAP_UNREADABLE, "station PDO map unreadable over CoE (input assignment/map)");
 
   n_out = lcec_omron_nx_verify(slave, lcec_omron_nx_declared(slave, EC_DIR_OUTPUT), &out, has_slot);
-  if (n_out == -ESTALE) return lcec_omron_nx_quarantine(slave, "output module PDO assignment/map differs from config");
+  if (n_out == -ESTALE) return lcec_omron_nx_quarantine(slave, LCEC_QUARANTINE_MAP_STALE, "output module PDO assignment/map differs from config");
   if (n_out < 0) return n_out;
   n_in = lcec_omron_nx_verify(slave, lcec_omron_nx_declared(slave, EC_DIR_INPUT), &in, has_slot);
-  if (n_in == -ESTALE) return lcec_omron_nx_quarantine(slave, "input module PDO assignment/map differs from config");
+  if (n_in == -ESTALE) return lcec_omron_nx_quarantine(slave, LCEC_QUARANTINE_MAP_STALE, "input module PDO assignment/map differs from config");
   if (n_in < 0) return n_in;
   rtapi_print_msg(RTAPI_MSG_INFO, LCEC_MSG_PFX "slave %s.%s: NX station matches the config: %d output and %d input unit PDOs\n",
       master->name, slave->name, n_out, n_in);

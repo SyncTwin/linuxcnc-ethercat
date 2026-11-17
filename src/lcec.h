@@ -139,6 +139,18 @@ typedef int (*lcec_slave_preinit_t)(lcec_slave_t *slave);
 typedef int (*lcec_slave_init_t)(int comp_id, lcec_slave_t *slave);
 typedef void (*lcec_slave_cleanup_t)(lcec_slave_t *slave);
 typedef void (*lcec_slave_rw_t)(lcec_slave_t *slave, long period);
+/// Why a slave is quarantined: an absent-at-load station that comes online in a
+/// live session needs a HAL restart (its slave config carries no PDOs).
+typedef enum {
+  LCEC_QUARANTINE_NONE = 0,
+  LCEC_QUARANTINE_ABSENT_AT_LOAD,  ///< Not on the bus when the HAL session loaded.
+  LCEC_QUARANTINE_MAP_UNREADABLE,  ///< On the bus, its PDO map could not be read over CoE.
+  LCEC_QUARANTINE_MAP_STALE,       ///< On the bus, its PDO map differs from the config.
+} lcec_quarantine_reason_t;
+
+/// Stable log marker for supervisors: an absent-at-load station came online.
+#define LCEC_MSG_STATION_APPEARED "appeared in live session: HAL restart required"
+
 /// Bus-only input callback: one domain image and its quality, every bus tick.
 typedef void (*lcec_slave_bus_read_t)(lcec_slave_t *slave, uint8_t *pd, int exchanged, int valid);
 
@@ -465,6 +477,8 @@ typedef struct lcec_slave {
   lcec_master_t *master;                      ///< Master for this slave
   lcec_sync_unit_t *sync_unit;                ///< Process-data Sync Unit containing this slave.
   int quarantined;                           ///< No PDO registration/callbacks until session reload.
+  int quarantine_reason;                     ///< lcec_quarantine_reason_t, why the slave is quarantined.
+  int quarantine_reported;                   ///< The live-session appearance was logged once.
   int index;                                  ///< Index of this slave.
   char name[LCEC_CONF_STR_MAXLEN];            ///< Slave name.
   char sync_unit_name[LCEC_CONF_STR_MAXLEN];  ///< Configured Sync Unit name.
